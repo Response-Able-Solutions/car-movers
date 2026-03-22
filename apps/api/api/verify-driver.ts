@@ -149,10 +149,6 @@ function mapItemToDriver(item: MondayItem, columns: ReturnType<typeof getConfig>
   };
 }
 
-function badRequest(response: VercelResponse, message: string) {
-  response.status(400).json({ error: message });
-}
-
 function findDriverByVerificationInput(
   items: MondayItem[],
   columns: ReturnType<typeof getConfig>['columns'],
@@ -206,12 +202,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const body = request.body as Partial<VerificationRequest> | undefined;
 
   if (!body?.id?.trim()) {
-    badRequest(response, 'Missing id');
+    response.status(400).json({ error: 'Missing id' });
     return;
   }
 
   if (!body?.surname?.trim()) {
-    badRequest(response, 'Missing surname');
+    response.status(400).json({ error: 'Missing surname' });
     return;
   }
 

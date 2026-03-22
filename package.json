@@ -1,0 +1,15 @@
+{
+  "name": "car-movers",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "yarn workspace @car-movers/api dev:server",
+    "dev:ui": "yarn workspace verify-ui dev",
+    "build:ui": "yarn workspace verify-ui build",
+    "typecheck:api": "yarn workspace @car-movers/api typecheck"
+  }
+}

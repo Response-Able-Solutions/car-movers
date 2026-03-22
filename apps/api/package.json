@@ -1,0 +1,20 @@
+{
+  "name": "@car-movers/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:server": "vercel dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@car-movers/shared": "0.0.0",
+    "vercel": "^50.34.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vercel/node": "^5.0.2",
+    "typescript": "^5.6.3",
+    "vercel": "^39.1.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@car-movers/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./verification": "./src/verification.ts"
+  }
+}

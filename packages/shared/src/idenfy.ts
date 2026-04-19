@@ -20,13 +20,13 @@ export type CreateIdenfySessionResponse = {
 export type IdenfySessionConfig = {
   apiKey: string;
   apiSecret: string;
-  callbackUrl: string;
+  callbackUrl?: string;
   baseUrl?: string;
 };
 
 type IdenfyCreateTokenPayload = {
   clientId: string;
-  callbackUrl: string;
+  callbackUrl?: string;
   externalRef?: string;
 };
 
@@ -62,11 +62,11 @@ export function buildIdenfyVerificationUrl(authToken: string, baseUrl = idenfyBa
   return url.toString();
 }
 
-export function buildIdenfyCreateSessionPayload(mondayItemId: string, callbackUrl: string): IdenfyCreateTokenPayload {
+export function buildIdenfyCreateSessionPayload(mondayItemId: string, callbackUrl?: string): IdenfyCreateTokenPayload {
   return {
     clientId: mondayItemId,
-    callbackUrl,
     externalRef: mondayItemId,
+    callbackUrl,
   };
 }
 
@@ -76,7 +76,15 @@ export async function createIdenfySession(
 ): Promise<CreateIdenfySessionResponse> {
   const payload = buildIdenfyCreateSessionPayload(request.mondayItemId, config.callbackUrl);
   const authorization = Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString('base64');
-  const response = await fetch(new URL('/api/v2/token', config.baseUrl ?? idenfyBaseUrl), {
+  const endpoint = new URL('/api/v2/token', config.baseUrl ?? idenfyBaseUrl);
+
+  console.log('idenfy.createSession.request', {
+    endpoint: endpoint.toString(),
+    payload,
+    hasCallbackUrl: Boolean(config.callbackUrl),
+  });
+
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -85,11 +93,19 @@ export async function createIdenfySession(
     body: JSON.stringify(payload),
   });
 
+  const responseText = await response.text();
+
+  console.log('idenfy.createSession.response', {
+    status: response.status,
+    ok: response.ok,
+    body: responseText,
+  });
+
   if (!response.ok) {
-    throw new Error(`iDenfy request failed with ${response.status}`);
+    throw new Error(`iDenfy request failed with ${response.status}: ${responseText}`);
   }
 
-  const result = (await response.json()) as IdenfyCreateTokenResponse;
+  const result = JSON.parse(responseText) as IdenfyCreateTokenResponse;
 
   return {
     authToken: result.authToken,

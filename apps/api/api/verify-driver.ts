@@ -117,42 +117,98 @@ async function getDriverItems() {
 }
 
 function parsePhotoUrl(rawValue: string | null, fallbackText: string | null) {
-  if (fallbackText) {
+  if (!rawValue) {
     return fallbackText;
   }
 
+  try {
+    const parsed = JSON.parse(rawValue) as {
+      files?: Array<{
+        assetUrl?: string;
+        asset_url?: string;
+        public_url?: string;
+        url?: string;
+      }>;
+      public_url?: string;
+      url?: string;
+    };
+
+    return (
+      parsed.files?.[0]?.public_url ??
+      parsed.public_url ??
+      parsed.files?.[0]?.assetUrl ??
+      parsed.files?.[0]?.asset_url ??
+      parsed.files?.[0]?.url ??
+      parsed.url ??
+      fallbackText ??
+      null
+    );
+  } catch {
+    return fallbackText;
+  }
+}
+
+function parsePhotoAssetId(rawValue: string | null) {
   if (!rawValue) {
     return null;
   }
 
   try {
     const parsed = JSON.parse(rawValue) as {
-      files?: Array<{ assetUrl?: string; public_url?: string }>;
-      url?: string;
+      files?: Array<{
+        assetId?: number | string;
+        asset_id?: number | string;
+      }>;
     };
 
-    return parsed.files?.[0]?.assetUrl ?? parsed.files?.[0]?.public_url ?? parsed.url ?? null;
+    const assetId = parsed.files?.[0]?.assetId ?? parsed.files?.[0]?.asset_id ?? null;
+    return assetId === null ? null : String(assetId);
   } catch {
     return null;
   }
 }
 
-function mapItemToDriver(item: MondayItem, columns: ReturnType<typeof getConfig>['columns']): DriverRecord {
+function getRequestBaseUrl(request: VercelRequest) {
+  const host = request.headers['x-forwarded-host'] ?? request.headers.host;
+  const protocolHeader = request.headers['x-forwarded-proto'];
+  const protocol = Array.isArray(protocolHeader) ? protocolHeader[0] : protocolHeader ?? 'http';
+
+  return `${protocol}://${host}`;
+}
+
+function buildProxyPhotoUrl(request: VercelRequest, assetId: string | null) {
+  if (!assetId) {
+    return null;
+  }
+
+  const url = new URL('/api/driver-photo', getRequestBaseUrl(request));
+  url.searchParams.set('assetId', assetId);
+  return url.toString();
+}
+
+function mapItemToDriver(
+  request: VercelRequest,
+  item: MondayItem,
+  columns: ReturnType<typeof getConfig>['columns'],
+): DriverRecord {
   const surname = readColumn(item, columns.surname)?.text ?? '';
   const firstName = readColumn(item, columns.firstName)?.text ?? '';
   const photoColumn = readColumn(item, columns.photo);
+  const sourcePhotoUrl = parsePhotoUrl(photoColumn?.value ?? null, photoColumn?.text ?? null);
+  const photoAssetId = parsePhotoAssetId(photoColumn?.value ?? null);
 
   return {
     id: readColumn(item, columns.id)?.text ?? '',
     surname,
     fullName: `${firstName} ${surname}`.trim() || item.name,
     status: readColumn(item, columns.status)?.text ?? 'Verified',
-    photoUrl: parsePhotoUrl(photoColumn?.value ?? null, photoColumn?.text ?? null),
+    photoUrl: buildProxyPhotoUrl(request, photoAssetId) ?? sourcePhotoUrl,
     driverSince: readColumn(item, columns.driverSince)?.text ?? null,
   };
 }
 
 function findDriverByVerificationInput(
+  request: VercelRequest,
   items: MondayItem[],
   columns: ReturnType<typeof getConfig>['columns'],
   input: VerificationRequest,
@@ -162,7 +218,7 @@ function findDriverByVerificationInput(
   const requiredStatus = 'active';
 
   return items.find((item) => {
-    const driver = mapItemToDriver(item, columns);
+    const driver = mapItemToDriver(request, item, columns);
 
     return (
       driver.id.trim().toLowerCase() === normalizedId &&
@@ -172,9 +228,12 @@ function findDriverByVerificationInput(
   });
 }
 
-async function verifyDriverIdentity(input: VerificationRequest): Promise<VerificationResponse> {
+async function verifyDriverIdentity(
+  request: VercelRequest,
+  input: VerificationRequest,
+): Promise<VerificationResponse> {
   const { items, columns } = await getDriverItems();
-  const matchingDriverItem = findDriverByVerificationInput(items, columns, input);
+  const matchingDriverItem = findDriverByVerificationInput(request, items, columns, input);
 
   if (!matchingDriverItem) {
     return {
@@ -185,7 +244,7 @@ async function verifyDriverIdentity(input: VerificationRequest): Promise<Verific
 
   return {
     verified: true,
-    driver: mapItemToDriver(matchingDriverItem, columns),
+    driver: mapItemToDriver(request, matchingDriverItem, columns),
   };
 }
 
@@ -217,7 +276,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    const result = await verifyDriverIdentity({
+    const result = await verifyDriverIdentity(request, {
       id: body.id,
       surname: body.surname,
     });

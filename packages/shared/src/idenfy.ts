@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 const idenfyBaseUrl = 'https://ivs.idenfy.com';
 
 export type CreateIdenfySessionRequest = {
@@ -36,6 +38,22 @@ type IdenfyCreateTokenResponse = {
   redirectUrl?: string | null;
   expiryTime?: number | null;
   sessionLength?: number | null;
+};
+
+export type IdenfyCallbackPayload = {
+  final: boolean;
+  scanRef: string;
+  clientId: string;
+  externalRef?: string | null;
+  status: {
+    overall: string;
+    autoFace?: string | null;
+    manualFace?: string | null;
+    autoDocument?: string | null;
+    manualDocument?: string | null;
+    fraudTags?: string[] | null;
+    mismatchTags?: string[] | null;
+  };
 };
 
 export function buildIdenfyVerificationUrl(authToken: string, baseUrl = idenfyBaseUrl) {
@@ -83,4 +101,31 @@ export async function createIdenfySession(
     sessionLength: result.sessionLength ?? null,
     message: result.message,
   };
+}
+
+export function verifyIdenfySignature(rawBody: Buffer, signature: string, signingKey: string) {
+  const digest = createHmac('sha256', signingKey).update(rawBody).digest('hex');
+  const providedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(digest);
+
+  if (providedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+export function mapIdenfyCallbackStatus(payload: IdenfyCallbackPayload) {
+  if (!payload.final) {
+    return null;
+  }
+
+  switch (payload.status.overall) {
+    case 'APPROVED':
+      return 'ID Verify Success';
+    case 'SUSPECTED':
+      return 'ID Verify Review';
+    default:
+      return null;
+  }
 }

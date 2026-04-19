@@ -28,6 +28,20 @@ function maskDriverId(driverId: string) {
   return `${driverId.slice(0, -5)}${'*'.repeat(5)}`;
 }
 
+function formatDriverSince(value: string) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const day = String(parsed.getUTCDate()).padStart(2, '0');
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+  const year = parsed.getUTCFullYear();
+
+  return `${day}-${month}-${year}`;
+}
+
 function App() {
   const driverId = useMemo(() => getDriverIdFromUrl(), []);
   const maskedDriverId = useMemo(() => maskDriverId(driverId), [driverId]);
@@ -135,7 +149,13 @@ function App() {
               <div className="min-w-0">
                 <h2 className="text-3xl font-semibold text-ink">{driver.fullName}</h2>
                 <p className="mt-2 text-base text-ink/70">ID: {maskDriverId(driver.id)}</p>
-                <p className="mt-4 inline-flex rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-white">
+                {driver.driverSince ? (
+                  <p className="mt-2 text-base text-ink/70">
+                    Driver since:{' '}
+                    <span className="font-semibold text-ink">{formatDriverSince(driver.driverSince)}</span>
+                  </p>
+                ) : null}
+                <p className="mt-4 inline-flex rounded-full border border-emerald-200 bg-emerald-100 px-4 py-1.5 text-sm font-medium text-emerald-800">
                   {driver.status}
                 </p>
               </div>

@@ -47,6 +47,7 @@ function getConfig() {
       surname: readEnv('MONDAY_SURNAME_COLUMN_ID'),
       status: readEnv('MONDAY_STATUS_COLUMN_ID'),
       photo: readEnv('MONDAY_PHOTO_COLUMN_ID'),
+      driverSince: readEnv('MONDAY_DRIVER_SINCE_COLUMN_ID'),
     },
   };
 }
@@ -64,7 +65,8 @@ function buildQuery(columns: ReturnType<typeof getConfig>['columns']) {
               "${columns.firstName}",
               "${columns.surname}",
               "${columns.status}",
-              "${columns.photo}"
+              "${columns.photo}",
+              "${columns.driverSince}"
             ]) {
               id
               text
@@ -146,6 +148,7 @@ function mapItemToDriver(item: MondayItem, columns: ReturnType<typeof getConfig>
     fullName: `${firstName} ${surname}`.trim() || item.name,
     status: readColumn(item, columns.status)?.text ?? 'Verified',
     photoUrl: parsePhotoUrl(photoColumn?.value ?? null, photoColumn?.text ?? null),
+    driverSince: readColumn(item, columns.driverSince)?.text ?? null,
   };
 }
 
@@ -156,13 +159,15 @@ function findDriverByVerificationInput(
 ) {
   const normalizedId = input.id.trim().toLowerCase();
   const normalizedSurname = input.surname.trim().toLowerCase();
+  const requiredStatus = 'active';
 
   return items.find((item) => {
     const driver = mapItemToDriver(item, columns);
 
     return (
       driver.id.trim().toLowerCase() === normalizedId &&
-      driver.surname.trim().toLowerCase() === normalizedSurname
+      driver.surname.trim().toLowerCase() === normalizedSurname &&
+      driver.status.trim().toLowerCase() === requiredStatus
     );
   });
 }

@@ -4,6 +4,7 @@ export type DriverRecord = {
   fullName: string;
   status: string;
   photoUrl: string | null;
+  driverSince: string | null;
 };
 
 export type VerificationRequest = {

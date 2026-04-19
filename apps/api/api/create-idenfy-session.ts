@@ -53,7 +53,19 @@ function hasValidApiKey(request: VercelRequest) {
 }
 
 function getCallbackUrl(request: VercelRequest) {
-  return process.env.IDENFY_CALLBACK_URL?.trim() || new URL('/api/idenfy-callback', getRequestBaseUrl(request)).toString();
+  const configuredUrl = process.env.IDENFY_CALLBACK_URL?.trim();
+
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  console.log('idenfy.createSession.callbackUrl', {
+    configured: false,
+    derivedUrl: new URL('/api/idenfy-callback', getRequestBaseUrl(request)).toString(),
+    note: 'Skipping callbackUrl because IDENFY_CALLBACK_URL is not explicitly set',
+  });
+
+  return undefined;
 }
 
 function readRequestBody(request: VercelRequest): CreateIdenfySessionRequest {
@@ -89,16 +101,33 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     const body = readRequestBody(request);
+    const callbackUrl = getCallbackUrl(request);
+
+    console.log('idenfy.createSession.handler', {
+      mondayItemId: body.mondayItemId,
+      hasApiKey: Boolean(readApiKey(request)),
+      callbackUrl: callbackUrl ?? null,
+      userAgent: request.headers['user-agent'] ?? null,
+    });
+
     const result: CreateIdenfySessionResponse = await createIdenfySession(body, {
       apiKey: readEnv('IDENFY_API_KEY'),
       apiSecret: readEnv('IDENFY_API_SECRET'),
-      callbackUrl: getCallbackUrl(request),
+      callbackUrl,
+    });
+
+    console.log('idenfy.createSession.success', {
+      mondayItemId: body.mondayItemId,
+      scanRef: result.scanRef,
+      clientId: result.clientId,
+      verificationUrl: result.verificationUrl,
     });
 
     response.status(200).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create iDenfy session';
     const statusCode = message === 'Missing mondayItemId' ? 400 : 500;
+    console.error('idenfy.createSession.error', { message });
     response.status(statusCode).json({ error: message });
   }
 }

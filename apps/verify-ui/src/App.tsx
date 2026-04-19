@@ -29,15 +29,22 @@ function maskDriverId(driverId: string) {
 }
 
 function formatDriverSince(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
+
   const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
 
-  const day = String(parsed.getUTCDate()).padStart(2, '0');
-  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
-  const year = parsed.getUTCFullYear();
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const year = parsed.getFullYear();
 
   return `${day}-${month}-${year}`;
 }

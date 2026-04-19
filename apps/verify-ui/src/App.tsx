@@ -130,7 +130,7 @@ function App() {
         </form>
 
         {status === 'verified' && driver ? (
-          <section className="mt-8 rounded-[28px] border border-primary/10 bg-gradient-to-br from-[#f3f9ff] via-[#eef7ff] to-white p-6 text-center md:p-7 md:text-left">
+          <section className="mt-8 rounded-[28px] border border-[#9cc8ee] bg-gradient-to-br from-[#dff0ff] via-[#cfe8ff] to-[#f7fbff] p-6 text-center shadow-[0_18px_45px_rgba(90,162,225,0.18)] md:p-7 md:text-left">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
               Verified
             </p>
@@ -162,7 +162,7 @@ function App() {
                     <span className="font-semibold text-ink">{formatDriverSince(driver.driverSince)}</span>
                   </p>
                 ) : null}
-                <p className="mt-4 inline-flex rounded-full border border-emerald-200 bg-emerald-100 px-4 py-1.5 text-sm font-medium text-emerald-800">
+                <p className="mt-4 inline-flex rounded-full border border-emerald-300 bg-emerald-100 px-4 py-1.5 text-sm font-medium text-emerald-800 shadow-[0_8px_20px_rgba(16,185,129,0.14)]">
                   {driver.status}
                 </p>
               </div>

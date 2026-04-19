@@ -5,7 +5,7 @@ import {
   createIdenfySession,
   type CreateIdenfySessionRequest,
   type CreateIdenfySessionResponse,
-} from '@car-movers/shared/idenfy';
+} from './shared/idenfy';
 
 function readEnv(name: string) {
   const value = process.env[name];

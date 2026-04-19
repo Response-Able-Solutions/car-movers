@@ -5,8 +5,8 @@ import {
   mapIdenfyCallbackStatus,
   type IdenfyCallbackPayload,
   verifyIdenfySignature,
-} from '@car-movers/shared/idenfy';
-import { updateMondayStatus } from '@car-movers/shared/monday';
+} from './shared/idenfy';
+import { updateMondayStatus } from './shared/monday';
 
 export const config = {
   api: {

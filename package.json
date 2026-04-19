@@ -10,6 +10,7 @@
     "dev:api": "yarn workspace @car-movers/api dev:server",
     "dev:ui": "yarn workspace verify-ui dev",
     "build:ui": "yarn workspace verify-ui build",
-    "typecheck:api": "yarn workspace @car-movers/api typecheck"
+    "typecheck:api": "yarn workspace @car-movers/api typecheck",
+    "test:shared": "node --test --experimental-strip-types packages/shared/src/*.test.ts"
   }
 }

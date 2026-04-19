@@ -130,7 +130,7 @@ function App() {
         </form>
 
         {status === 'verified' && driver ? (
-          <section className="mt-8 rounded-[28px] border border-primary/15 bg-gradient-to-br from-secondary/25 to-white p-6 text-center md:p-7 md:text-left">
+          <section className="mt-8 rounded-[28px] border border-primary/10 bg-gradient-to-br from-[#f3f9ff] via-[#eef7ff] to-white p-6 text-center md:p-7 md:text-left">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
               Verified
             </p>

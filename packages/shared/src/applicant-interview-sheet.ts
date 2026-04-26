@@ -162,10 +162,10 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
 
 function buildHeaderValues(data: ApplicantInterviewSheetData) {
   return [
-    ['Applicant', data.fullName, 220],
-    ['Phone', data.phone, 132],
-    ['Email', data.email, 148],
-    ['Shift pattern', displayValue(data.shiftPattern), 148],
+    ['Applicant', data.fullName],
+    ['Phone', data.phone],
+    ['Email', data.email],
+    ['Shift pattern', displayValue(data.shiftPattern)],
   ] as const;
 }
 
@@ -415,14 +415,18 @@ export async function buildApplicantInterviewPdf(
   let state = createPage(doc, fonts);
   await drawLogo(doc, state.page, options?.logoBytes);
   const headerEntries = buildHeaderValues(data);
-  let cardX = PAGE.marginX;
+  const cardGap = 12;
+  const cardWidth = (PAGE.width - PAGE.marginX * 2 - cardGap) / 2;
 
-  for (const [label, value, width] of headerEntries) {
-    drawInfoCard(state.page, fonts, label, value, cardX, state.y, width);
-    cardX += width + 12;
+  for (const [index, [label, value]] of headerEntries.entries()) {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const cardX = PAGE.marginX + column * (cardWidth + cardGap);
+    const cardY = state.y - row * 54;
+    drawInfoCard(state.page, fonts, label, value, cardX, cardY, cardWidth);
   }
 
-  state.y -= 60;
+  state.y -= 118;
 
   state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
   for (const [index, prompt] of data.interviewPrompts.entries()) {

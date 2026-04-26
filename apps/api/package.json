@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@car-movers/shared": "0.0.0",
+    "pdf-lib": "^1.17.1",
     "vercel": "^50.34.3"
   },
   "devDependencies": {

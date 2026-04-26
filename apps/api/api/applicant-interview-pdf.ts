@@ -8,7 +8,7 @@ import {
   buildApplicantInterviewPdf,
   getApplicantInterviewSheetData,
   type ApplicantInterviewSheetConfig,
-} from '@car-movers/shared/applicant-interview-sheet';
+} from './shared/applicant-interview-sheet.js';
 
 function readEnv(name: string) {
   const value = process.env[name];

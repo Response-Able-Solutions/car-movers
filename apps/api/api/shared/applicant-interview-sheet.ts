@@ -89,12 +89,13 @@ const COLOR = {
 };
 
 const LAYOUT = {
-  coverTop: 248,
+  coverTop: 186,
   continuationTop: 86,
-  sectionGap: 18,
+  sectionGap: 24,
   cardGap: 12,
-  cardRowGap: 14,
-  promptGap: 10,
+  cardRowGap: 12,
+  sectionBlockGap: 16,
+  promptGap: 12,
   answerGap: 12,
 };
 
@@ -299,24 +300,24 @@ function createCoverPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont
   });
   page.drawRectangle({
     x: PAGE.marginX,
-    y: PAGE.height - 218,
+    y: PAGE.height - 162,
     width: PAGE.width - PAGE.marginX * 2,
-    height: 156,
+    height: 92,
     color: COLOR.surface,
     borderColor: COLOR.line,
     borderWidth: 1,
   });
-  drawPill(page, PAGE.marginX, PAGE.height - 72, 134, 20, COLOR.primary);
+  drawPill(page, PAGE.marginX, PAGE.height - 68, 134, 20, COLOR.primary);
   page.drawText('INTERNAL INTERVIEW', {
     x: PAGE.marginX + 16,
-    y: PAGE.height - 65,
+    y: PAGE.height - 61,
     size: 7.5,
     font: fonts.bold,
     color: COLOR.surface,
   });
   page.drawText('Applicant Interview Sheet', {
     x: PAGE.marginX,
-    y: PAGE.height - 110,
+    y: PAGE.height - 108,
     size: FONT.title,
     font: fonts.bold,
     color: COLOR.ink,
@@ -330,7 +331,7 @@ function createCoverPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont
   });
   page.drawText('For internal use only', {
     x: PAGE.marginX,
-    y: PAGE.height - 154,
+    y: PAGE.height - 148,
     size: FONT.small,
     font: fonts.bold,
     color: COLOR.primaryDark,
@@ -485,20 +486,20 @@ function drawInfoCard(
     height: 4,
     color: COLOR.primary,
   });
-  drawPill(page, x + 12, y - 24, 76, 16, COLOR.mist);
+  drawPill(page, x + 12, y - 25, 84, 16, COLOR.mist);
   page.drawText(label.toUpperCase(), {
     x: x + 22,
-    y: y - 18,
+    y: y - 19,
     size: 7.2,
     font: fonts.bold,
     color: COLOR.primaryDark,
   });
-  drawWrappedBlock(page, fonts.body, value, x + 12, y - 40, width - 24, FONT.body, COLOR.ink);
+  drawWrappedBlock(page, fonts.body, value, x + 16, y - 44, width - 32, FONT.body, COLOR.ink);
 }
 
 function measureInfoCardHeight(font: PDFFont, value: string, width: number) {
-  const textHeight = measureWrappedTextHeight(value, font, FONT.body, width - 24);
-  return Math.max(58, 42 + textHeight);
+  const textHeight = measureWrappedTextHeight(value, font, FONT.body, width - 32);
+  return Math.max(68, 48 + textHeight);
 }
 
 export async function fetchApplicantInterviewItem(
@@ -604,6 +605,8 @@ export async function buildApplicantInterviewPdf(
     state.y -= rowHeight + LAYOUT.cardRowGap;
   }
 
+  state.y -= LAYOUT.sectionBlockGap;
+
   state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
   for (const [index, prompt] of data.interviewPrompts.entries()) {
     const promptWidth = PAGE.width - PAGE.marginX * 2 - 34;
@@ -619,7 +622,7 @@ export async function buildApplicantInterviewPdf(
     });
     state.page.drawText(String(index + 1), {
       x: PAGE.marginX + 7.9,
-      y: state.y - 2.5,
+      y: state.y - 3.2,
       size: 9,
       font: boldFont,
       color: COLOR.surface,
@@ -630,11 +633,12 @@ export async function buildApplicantInterviewPdf(
         bodyFont,
         prompt,
         PAGE.marginX + 34,
-        state.y,
+        state.y - 1,
         promptWidth,
       ) - LAYOUT.promptGap;
   }
 
+  state.y -= 2;
   state = drawSectionTitle(doc, state, fonts, 'Existing application answers');
   for (const answer of data.previousAnswers) {
     const answerWidth = PAGE.width - PAGE.marginX * 2 - 24;

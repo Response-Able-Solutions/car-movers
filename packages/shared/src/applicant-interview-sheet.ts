@@ -34,7 +34,7 @@ export type ApplicantInterviewSheetConfig = {
     status?: string;
     notes?: string;
   };
-  answerFields: ApplicantInterviewAnswerFieldConfig[];
+  answerField: ApplicantInterviewAnswerFieldConfig | null;
 };
 
 export type ApplicantInterviewAnswer = {
@@ -108,7 +108,7 @@ function buildColumnSelection(config: ApplicantInterviewSheetConfig) {
     config.columns.role,
     config.columns.status,
     config.columns.notes,
-    ...config.answerFields.map((field) => field.columnId),
+    config.answerField?.columnId,
   ].filter((value): value is string => Boolean(value));
 
   return [...new Set(columnIds)].map((columnId) => escapeGraphQlString(columnId)).join(', ');
@@ -348,10 +348,14 @@ export function mapApplicantInterviewSheetData(
     status: normalizeText(readColumn(item, config.columns.status)?.text),
     notes: normalizeText(readColumn(item, config.columns.notes)?.text),
     interviewPrompts: DEFAULT_INTERVIEW_PROMPTS,
-    previousAnswers: config.answerFields.map((field) => ({
-      label: field.label,
-      answer: displayValue(readColumn(item, field.columnId)?.text),
-    })),
+    previousAnswers: config.answerField
+      ? [
+          {
+            label: config.answerField.label,
+            answer: displayValue(readColumn(item, config.answerField.columnId)?.text),
+          },
+        ]
+      : [],
   };
 }
 

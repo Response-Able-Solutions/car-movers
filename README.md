@@ -77,14 +77,16 @@ APPLICANT_INTERVIEW_EMAIL_COLUMN_ID=email_email
 APPLICANT_INTERVIEW_ROLE_COLUMN_ID=text_role
 APPLICANT_INTERVIEW_STATUS_COLUMN_ID=color_status
 APPLICANT_INTERVIEW_NOTES_COLUMN_ID=long_text_notes
-APPLICANT_INTERVIEW_PREVIOUS_ANSWERS_JSON=[{"label":"Why do you want this role?","columnId":"long_text_why_role"},{"label":"When can you start?","columnId":"text_start_date"}]
+APPLICANT_INTERVIEW_PREVIOUS_ANSWER_COLUMN_ID=long_text_mm258jxn
+APPLICANT_INTERVIEW_PREVIOUS_ANSWER_LABEL=Why do you want this role?
 ```
 
 Notes:
 
 - `IDENFY_CALLBACK_URL` is optional. If omitted, the create-session endpoint derives the callback URL from the incoming request host.
 - `INTERNAL_API_KEY` protects `POST /api/create-idenfy-session` and `GET /api/applicant-interview-pdf` via the `x-api-key` header.
-- `APPLICANT_INTERVIEW_PREVIOUS_ANSWERS_JSON` is optional, but when set it must be a JSON array of `{ "label": "...", "columnId": "..." }` objects.
+- `APPLICANT_INTERVIEW_PREVIOUS_ANSWER_COLUMN_ID` is optional. When set, the PDF includes one existing application answer from that monday column.
+- `APPLICANT_INTERVIEW_PREVIOUS_ANSWER_LABEL` is optional and defaults to `Existing application answer`.
 - The applicant interview PDF endpoint reads from a separate configured monday board and returns a branded `application/pdf` document for one item ID.
 - The callback flow updates monday status column `MONDAY_STATUS_COLUMN_ID` with `ID Verify Success` for final approved outcomes and `ID Verify Review` for final suspected outcomes.
 

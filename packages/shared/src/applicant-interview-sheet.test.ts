@@ -24,10 +24,7 @@ const config: ApplicantInterviewSheetConfig = {
     status: 'status',
     notes: 'notes',
   },
-  answerFields: [
-    { label: 'Why do you want this role?', columnId: 'why_role' },
-    { label: 'When can you start?', columnId: 'start_date' },
-  ],
+  answerField: { label: 'Existing application answer', columnId: 'why_role' },
 };
 
 function buildItem(overrides?: Partial<MondayItem>): MondayItem {
@@ -66,8 +63,8 @@ test('mapApplicantInterviewSheetData normalizes missing optional values', () => 
   assert.equal(data.phone, 'Not provided');
   assert.equal(data.email, 'alex@example.com');
   assert.equal(data.role, null);
+  assert.equal(data.previousAnswers.length, 1);
   assert.equal(data.previousAnswers[0]?.answer, 'Not provided');
-  assert.equal(data.previousAnswers[1]?.answer, 'Not provided');
 });
 
 test('fetchApplicantInterviewItem surfaces monday GraphQL failures', async () => {

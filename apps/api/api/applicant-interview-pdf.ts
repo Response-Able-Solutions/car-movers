@@ -7,7 +7,6 @@ import {
   ApplicantInterviewItemNotFoundError,
   buildApplicantInterviewPdf,
   getApplicantInterviewSheetData,
-  type ApplicantInterviewAnswerFieldConfig,
   type ApplicantInterviewSheetConfig,
 } from '@car-movers/shared/applicant-interview-sheet';
 
@@ -44,40 +43,17 @@ function hasValidApiKey(request: VercelRequest) {
   return timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
-function parseAnswerFields(rawValue: string | undefined): ApplicantInterviewAnswerFieldConfig[] {
-  if (!rawValue?.trim()) {
-    return [];
+function readAnswerField() {
+  const columnId = process.env.APPLICANT_INTERVIEW_PREVIOUS_ANSWER_COLUMN_ID?.trim();
+
+  if (!columnId) {
+    return null;
   }
 
-  const parsed = JSON.parse(rawValue) as unknown;
-
-  if (!Array.isArray(parsed)) {
-    throw new Error('APPLICANT_INTERVIEW_PREVIOUS_ANSWERS_JSON must be a JSON array');
-  }
-
-  return parsed.map((entry, index) => {
-    if (!entry || typeof entry !== 'object') {
-      throw new Error(`Answer field config at index ${index} must be an object`);
-    }
-
-    const { label, columnId } = entry as {
-      label?: unknown;
-      columnId?: unknown;
-    };
-
-    if (typeof label !== 'string' || !label.trim()) {
-      throw new Error(`Answer field config at index ${index} is missing label`);
-    }
-
-    if (typeof columnId !== 'string' || !columnId.trim()) {
-      throw new Error(`Answer field config at index ${index} is missing columnId`);
-    }
-
-    return {
-      label: label.trim(),
-      columnId: columnId.trim(),
-    };
-  });
+  return {
+    label: process.env.APPLICANT_INTERVIEW_PREVIOUS_ANSWER_LABEL?.trim() || 'Existing application answer',
+    columnId,
+  };
 }
 
 function getInterviewSheetConfig(): ApplicantInterviewSheetConfig {
@@ -93,7 +69,7 @@ function getInterviewSheetConfig(): ApplicantInterviewSheetConfig {
       status: process.env.APPLICANT_INTERVIEW_STATUS_COLUMN_ID?.trim(),
       notes: process.env.APPLICANT_INTERVIEW_NOTES_COLUMN_ID?.trim(),
     },
-    answerFields: parseAnswerFields(process.env.APPLICANT_INTERVIEW_PREVIOUS_ANSWERS_JSON),
+    answerField: readAnswerField(),
   };
 }
 

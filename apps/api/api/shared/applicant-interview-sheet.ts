@@ -95,8 +95,8 @@ const LAYOUT = {
   cardGap: 12,
   cardRowGap: 12,
   sectionBlockGap: 16,
-  promptGap: 12,
-  answerGap: 12,
+  promptGap: 14,
+  answerGap: 14,
 };
 
 export const DEFAULT_INTERVIEW_PROMPTS = [
@@ -300,9 +300,9 @@ function createCoverPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont
   });
   page.drawRectangle({
     x: PAGE.marginX,
-    y: PAGE.height - 162,
+    y: PAGE.height - 174,
     width: PAGE.width - PAGE.marginX * 2,
-    height: 92,
+    height: 104,
     color: COLOR.surface,
     borderColor: COLOR.line,
     borderWidth: 1,
@@ -317,21 +317,14 @@ function createCoverPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont
   });
   page.drawText('Applicant Interview Sheet', {
     x: PAGE.marginX,
-    y: PAGE.height - 108,
+    y: PAGE.height - 116,
     size: FONT.title,
     font: fonts.bold,
     color: COLOR.ink,
   });
-  page.drawText('Structured phone-screen brief with candidate details, prompts, and prior answers.', {
-    x: PAGE.marginX,
-    y: PAGE.height - 132,
-    size: FONT.body,
-    font: fonts.body,
-    color: COLOR.muted,
-  });
   page.drawText('For internal use only', {
     x: PAGE.marginX,
-    y: PAGE.height - 148,
+    y: PAGE.height - 152,
     size: FONT.small,
     font: fonts.bold,
     color: COLOR.primaryDark,
@@ -608,31 +601,17 @@ export async function buildApplicantInterviewPdf(
   state.y -= LAYOUT.sectionBlockGap;
 
   state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
-  for (const [index, prompt] of data.interviewPrompts.entries()) {
-    const promptWidth = PAGE.width - PAGE.marginX * 2 - 34;
+  for (const prompt of data.interviewPrompts) {
+    const promptWidth = PAGE.width - PAGE.marginX * 2;
     const promptHeight = measureWrappedTextHeight(prompt, bodyFont, FONT.body, promptWidth);
-    const requiredHeight = Math.max(28, promptHeight) + 12;
+    const requiredHeight = promptHeight + 2;
     state = ensureSpace(doc, state, fonts, requiredHeight);
-    state.page.drawEllipse({
-      x: PAGE.marginX + 11,
-      y: state.y - 8,
-      xScale: 11,
-      yScale: 11,
-      color: COLOR.primary,
-    });
-    state.page.drawText(String(index + 1), {
-      x: PAGE.marginX + 7.9,
-      y: state.y - 3.2,
-      size: 9,
-      font: boldFont,
-      color: COLOR.surface,
-    });
     state.y =
       drawWrappedBlock(
         state.page,
         bodyFont,
         prompt,
-        PAGE.marginX + 34,
+        PAGE.marginX,
         state.y - 1,
         promptWidth,
       ) - LAYOUT.promptGap;

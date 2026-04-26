@@ -63,27 +63,39 @@ type MondayItemQueryResponse = {
 const PAGE = {
   width: 595.28,
   height: 841.89,
-  marginX: 48,
-  marginBottom: 48,
+  marginX: 42,
+  marginBottom: 42,
 };
 
 const FONT = {
-  title: 20,
-  section: 13,
+  title: 26,
+  section: 14,
   body: 10.5,
-  small: 9,
+  small: 8.5,
   lineGap: 3,
 };
 
 const COLOR = {
-  ink: rgb(0.062, 0.192, 0.302),
-  primary: rgb(0.353, 0.635, 0.882),
-  primaryDark: rgb(0.31, 0.573, 0.812),
-  mist: rgb(0.918, 0.957, 0.992),
+  ink: rgb(0.043, 0.165, 0.29),
+  primary: rgb(0.22, 0.68, 0.97),
+  primaryDark: rgb(0.118, 0.49, 0.84),
+  sky: rgb(0.752, 0.914, 0.995),
+  mist: rgb(0.932, 0.979, 1),
   surface: rgb(1, 1, 1),
-  line: rgb(0.816, 0.894, 0.973),
-  muted: rgb(0.388, 0.514, 0.627),
-  answerFill: rgb(0.969, 0.984, 1),
+  sheet: rgb(0.984, 0.995, 1),
+  line: rgb(0.737, 0.882, 0.98),
+  muted: rgb(0.365, 0.482, 0.588),
+  answerFill: rgb(0.963, 0.989, 1),
+};
+
+const LAYOUT = {
+  coverTop: 248,
+  continuationTop: 86,
+  sectionGap: 18,
+  cardGap: 12,
+  cardRowGap: 14,
+  promptGap: 10,
+  answerGap: 12,
 };
 
 export const DEFAULT_INTERVIEW_PROMPTS = [
@@ -171,6 +183,14 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
   return lines;
 }
 
+function getTextHeight(lineCount: number, fontSize: number) {
+  return lineCount * (fontSize + FONT.lineGap);
+}
+
+function measureWrappedTextHeight(text: string, font: PDFFont, fontSize: number, maxWidth: number) {
+  return getTextHeight(wrapText(text, font, fontSize, maxWidth).length, fontSize);
+}
+
 function buildHeaderValues(data: ApplicantInterviewSheetData) {
   return [
     ['Applicant', data.fullName],
@@ -208,62 +228,109 @@ function drawWrappedBlock(
   return currentY;
 }
 
-function createPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont }) {
+function drawPill(
+  page: PDFPage,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: ReturnType<typeof rgb>,
+) {
+  const radius = height / 2;
+  page.drawRectangle({
+    x: x + radius,
+    y,
+    width: Math.max(width - height, 0),
+    height,
+    color,
+  });
+  page.drawEllipse({
+    x: x + radius,
+    y: y + radius,
+    xScale: radius,
+    yScale: radius,
+    color,
+  });
+  page.drawEllipse({
+    x: x + width - radius,
+    y: y + radius,
+    xScale: radius,
+    yScale: radius,
+    color,
+  });
+}
+
+function createCoverPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont }) {
   const page = doc.addPage([PAGE.width, PAGE.height]);
   page.drawRectangle({
     x: 0,
     y: 0,
     width: PAGE.width,
     height: PAGE.height,
-    color: rgb(1, 1, 1),
+    color: COLOR.sheet,
   });
-  page.drawRectangle({
-    x: 0,
-    y: PAGE.height - 240,
-    width: PAGE.width,
-    height: 240,
+  page.drawEllipse({
+    x: PAGE.width - 112,
+    y: PAGE.height - 96,
+    xScale: 108,
+    yScale: 108,
+    color: COLOR.sky,
+  });
+  page.drawEllipse({
+    x: PAGE.width - 36,
+    y: PAGE.height - 32,
+    xScale: 76,
+    yScale: 76,
     color: COLOR.mist,
   });
   page.drawRectangle({
     x: 0,
-    y: PAGE.height - 10,
+    y: PAGE.height - LAYOUT.coverTop,
     width: PAGE.width,
-    height: 10,
+    height: LAYOUT.coverTop,
+    color: COLOR.mist,
+  });
+  page.drawRectangle({
+    x: 0,
+    y: PAGE.height - 8,
+    width: PAGE.width,
+    height: 8,
     color: COLOR.primary,
   });
   page.drawRectangle({
     x: PAGE.marginX,
-    y: PAGE.height - 220,
+    y: PAGE.height - 218,
     width: PAGE.width - PAGE.marginX * 2,
-    height: 170,
+    height: 156,
     color: COLOR.surface,
-    borderColor: rgb(1, 1, 1),
+    borderColor: COLOR.line,
     borderWidth: 1,
   });
-  page.drawText('APPLICANT INTERVIEW SHEET', {
-    x: PAGE.marginX,
-    y: PAGE.height - 82,
-    size: 9,
+  drawPill(page, PAGE.marginX, PAGE.height - 72, 134, 20, COLOR.primary);
+  page.drawText('INTERNAL INTERVIEW', {
+    x: PAGE.marginX + 16,
+    y: PAGE.height - 65,
+    size: 7.5,
     font: fonts.bold,
-    color: COLOR.primary,
+    color: COLOR.surface,
   });
   page.drawText('Applicant Interview Sheet', {
     x: PAGE.marginX,
-    y: PAGE.height - 108,
-    size: 24,
+    y: PAGE.height - 110,
+    size: FONT.title,
     font: fonts.bold,
     color: COLOR.ink,
   });
-  page.drawText('Structured internal briefing for live phone interviews', {
+  page.drawText('Structured phone-screen brief with candidate details, prompts, and prior answers.', {
     x: PAGE.marginX,
-    y: PAGE.height - 128,
+    y: PAGE.height - 132,
     size: FONT.body,
     font: fonts.body,
     color: COLOR.muted,
   });
-  page.drawText('Internal use only', {
+  page.drawText('For internal use only', {
     x: PAGE.marginX,
-    y: PAGE.height - 146,
+    y: PAGE.height - 154,
     size: FONT.small,
     font: fonts.bold,
     color: COLOR.primaryDark,
@@ -271,7 +338,51 @@ function createPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont }) {
 
   return {
     page,
-    y: PAGE.height - 188,
+    y: PAGE.height - 196,
+  };
+}
+
+function createContinuationPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont }) {
+  const page = doc.addPage([PAGE.width, PAGE.height]);
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: PAGE.width,
+    height: PAGE.height,
+    color: COLOR.sheet,
+  });
+  page.drawRectangle({
+    x: 0,
+    y: PAGE.height - LAYOUT.continuationTop,
+    width: PAGE.width,
+    height: LAYOUT.continuationTop,
+    color: COLOR.mist,
+  });
+  page.drawRectangle({
+    x: 0,
+    y: PAGE.height - 6,
+    width: PAGE.width,
+    height: 6,
+    color: COLOR.primary,
+  });
+  page.drawText('Applicant Interview Sheet', {
+    x: PAGE.marginX,
+    y: PAGE.height - 40,
+    size: 15,
+    font: fonts.bold,
+    color: COLOR.ink,
+  });
+  page.drawText('Continued', {
+    x: PAGE.width - PAGE.marginX - 46,
+    y: PAGE.height - 40,
+    size: FONT.small,
+    font: fonts.bold,
+    color: COLOR.primaryDark,
+  });
+
+  return {
+    page,
+    y: PAGE.height - 104,
   };
 }
 
@@ -310,7 +421,7 @@ function ensureSpace(
     return state;
   }
 
-  return createPage(doc, fonts);
+  return createContinuationPage(doc, fonts);
 }
 
 function drawSectionTitle(
@@ -319,7 +430,7 @@ function drawSectionTitle(
   fonts: { body: PDFFont; bold: PDFFont },
   title: string,
 ) {
-  const nextState = ensureSpace(doc, state, fonts, 28);
+  const nextState = ensureSpace(doc, state, fonts, 34);
   nextState.page.drawText(title, {
     x: PAGE.marginX,
     y: nextState.y,
@@ -327,10 +438,24 @@ function drawSectionTitle(
     font: fonts.bold,
     color: COLOR.ink,
   });
+  nextState.page.drawRectangle({
+    x: PAGE.marginX,
+    y: nextState.y - 8,
+    width: PAGE.width - PAGE.marginX * 2,
+    height: 1,
+    color: COLOR.line,
+  });
+  nextState.page.drawRectangle({
+    x: PAGE.marginX,
+    y: nextState.y - 8,
+    width: 72,
+    height: 2,
+    color: COLOR.primary,
+  });
 
   return {
     page: nextState.page,
-    y: nextState.y - 20,
+    y: nextState.y - LAYOUT.sectionGap,
   };
 }
 
@@ -342,24 +467,38 @@ function drawInfoCard(
   x: number,
   y: number,
   width: number,
+  height: number,
 ) {
   page.drawRectangle({
     x,
-    y: y - 44,
+    y: y - height,
     width,
-    height: 44,
-    color: COLOR.mist,
+    height,
+    color: COLOR.surface,
     borderColor: COLOR.line,
     borderWidth: 1,
   });
+  page.drawRectangle({
+    x,
+    y: y - 4,
+    width,
+    height: 4,
+    color: COLOR.primary,
+  });
+  drawPill(page, x + 12, y - 24, 76, 16, COLOR.mist);
   page.drawText(label.toUpperCase(), {
-    x: x + 12,
-    y: y - 14,
-    size: 7.5,
+    x: x + 22,
+    y: y - 18,
+    size: 7.2,
     font: fonts.bold,
     color: COLOR.primaryDark,
   });
-  drawWrappedBlock(page, fonts.body, value, x + 12, y - 29, width - 24, FONT.body, COLOR.ink);
+  drawWrappedBlock(page, fonts.body, value, x + 12, y - 40, width - 24, FONT.body, COLOR.ink);
+}
+
+function measureInfoCardHeight(font: PDFFont, value: string, width: number) {
+  const textHeight = measureWrappedTextHeight(value, font, FONT.body, width - 24);
+  return Math.max(58, 42 + textHeight);
 }
 
 export async function fetchApplicantInterviewItem(
@@ -446,67 +585,82 @@ export async function buildApplicantInterviewPdf(
   const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
   const fonts = { body: bodyFont, bold: boldFont };
 
-  let state = createPage(doc, fonts);
+  let state = createCoverPage(doc, fonts);
   await drawLogo(doc, state.page, options?.logoBytes);
   const headerEntries = buildHeaderValues(data);
-  const cardGap = 12;
-  const cardWidth = (PAGE.width - PAGE.marginX * 2 - cardGap) / 2;
+  const cardWidth = (PAGE.width - PAGE.marginX * 2 - LAYOUT.cardGap) / 2;
 
-  for (const [index, [label, value]] of headerEntries.entries()) {
-    const column = index % 2;
-    const row = Math.floor(index / 2);
-    const cardX = PAGE.marginX + column * (cardWidth + cardGap);
-    const cardY = state.y - row * 54;
-    drawInfoCard(state.page, fonts, label, value, cardX, cardY, cardWidth);
+  for (let index = 0; index < headerEntries.length; index += 2) {
+    const rowEntries = headerEntries.slice(index, index + 2);
+    const rowHeight = Math.max(
+      ...rowEntries.map(([, value]) => measureInfoCardHeight(bodyFont, value, cardWidth)),
+    );
+
+    rowEntries.forEach(([label, value], column) => {
+      const cardX = PAGE.marginX + column * (cardWidth + LAYOUT.cardGap);
+      drawInfoCard(state.page, fonts, label, value, cardX, state.y, cardWidth, rowHeight);
+    });
+
+    state.y -= rowHeight + LAYOUT.cardRowGap;
   }
-
-  state.y -= 124;
 
   state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
   for (const [index, prompt] of data.interviewPrompts.entries()) {
-    state = ensureSpace(doc, state, fonts, 40);
-    state.page.drawRectangle({
-      x: PAGE.marginX,
-      y: state.y - 4,
-      width: 18,
-      height: 18,
-      color: COLOR.mist,
-      borderColor: COLOR.line,
-      borderWidth: 1,
+    const promptWidth = PAGE.width - PAGE.marginX * 2 - 34;
+    const promptHeight = measureWrappedTextHeight(prompt, bodyFont, FONT.body, promptWidth);
+    const requiredHeight = Math.max(28, promptHeight) + 12;
+    state = ensureSpace(doc, state, fonts, requiredHeight);
+    state.page.drawEllipse({
+      x: PAGE.marginX + 11,
+      y: state.y - 8,
+      xScale: 11,
+      yScale: 11,
+      color: COLOR.primary,
     });
     state.page.drawText(String(index + 1), {
-      x: PAGE.marginX + 6,
-      y: state.y + 1,
+      x: PAGE.marginX + 7.9,
+      y: state.y - 2.5,
       size: 9,
       font: boldFont,
-      color: COLOR.primaryDark,
+      color: COLOR.surface,
     });
     state.y =
       drawWrappedBlock(
         state.page,
         bodyFont,
         prompt,
-        PAGE.marginX + 28,
+        PAGE.marginX + 34,
         state.y,
-        PAGE.width - PAGE.marginX * 2 - 28,
-      ) - 7;
+        promptWidth,
+      ) - LAYOUT.promptGap;
   }
 
   state = drawSectionTitle(doc, state, fonts, 'Existing application answers');
   for (const answer of data.previousAnswers) {
-    state = ensureSpace(doc, state, fonts, 72);
+    const answerWidth = PAGE.width - PAGE.marginX * 2 - 24;
+    const answerHeight = measureWrappedTextHeight(answer.answer, bodyFont, FONT.body, answerWidth);
+    const boxHeight = Math.max(62, 34 + answerHeight);
+    state = ensureSpace(doc, state, fonts, boxHeight + 4);
     state.page.drawRectangle({
       x: PAGE.marginX,
-      y: state.y - 56,
+      y: state.y - boxHeight,
       width: PAGE.width - PAGE.marginX * 2,
-      height: 56,
+      height: boxHeight,
       color: COLOR.answerFill,
       borderColor: COLOR.line,
       borderWidth: 1,
     });
+    state.page.drawRectangle({
+      x: PAGE.marginX,
+      y: state.y - boxHeight,
+      width: 5,
+      height: boxHeight,
+      color: COLOR.primary,
+    });
+    drawPill(state.page, PAGE.marginX + 14, state.y - 24, 148, 16, COLOR.surface);
     state.page.drawText(answer.label, {
-      x: PAGE.marginX + 12,
-      y: state.y - 14,
+      x: PAGE.marginX + 24,
+      y: state.y - 18,
       size: FONT.small,
       font: boldFont,
       color: COLOR.primaryDark,
@@ -517,22 +671,36 @@ export async function buildApplicantInterviewPdf(
         bodyFont,
         answer.answer,
         PAGE.marginX + 12,
-        state.y - 30,
+        state.y - 34,
         PAGE.width - PAGE.marginX * 2 - 24,
-      ) - 14;
+      ) - LAYOUT.answerGap;
   }
 
   if (data.notes) {
     state = drawSectionTitle(doc, state, fonts, 'Application notes');
-    state = ensureSpace(doc, state, fonts, 60);
+    const notesHeight = measureWrappedTextHeight(
+      data.notes,
+      bodyFont,
+      FONT.body,
+      PAGE.width - PAGE.marginX * 2 - 24,
+    );
+    const boxHeight = Math.max(54, 24 + notesHeight);
+    state = ensureSpace(doc, state, fonts, boxHeight + 4);
     state.page.drawRectangle({
       x: PAGE.marginX,
-      y: state.y - 52,
+      y: state.y - boxHeight,
       width: PAGE.width - PAGE.marginX * 2,
-      height: 52,
+      height: boxHeight,
       color: COLOR.surface,
       borderColor: COLOR.line,
       borderWidth: 1,
+    });
+    state.page.drawRectangle({
+      x: PAGE.marginX,
+      y: state.y - 8,
+      width: PAGE.width - PAGE.marginX * 2,
+      height: 8,
+      color: COLOR.mist,
     });
     state.y =
       drawWrappedBlock(

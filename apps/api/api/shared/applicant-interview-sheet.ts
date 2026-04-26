@@ -30,11 +30,12 @@ export type ApplicantInterviewSheetConfig = {
     lastName: string;
     phone: string;
     email: string;
+    shiftPattern?: string;
     role?: string;
     status?: string;
     notes?: string;
   };
-  answerField: ApplicantInterviewAnswerFieldConfig | null;
+  answerFields: ApplicantInterviewAnswerFieldConfig[];
 };
 
 export type ApplicantInterviewAnswer = {
@@ -47,6 +48,7 @@ export type ApplicantInterviewSheetData = {
   fullName: string;
   phone: string;
   email: string;
+  shiftPattern: string | null;
   role: string | null;
   status: string | null;
   notes: string | null;
@@ -105,10 +107,11 @@ function buildColumnSelection(config: ApplicantInterviewSheetConfig) {
     config.columns.lastName,
     config.columns.phone,
     config.columns.email,
+    config.columns.shiftPattern,
     config.columns.role,
     config.columns.status,
     config.columns.notes,
-    config.answerField?.columnId,
+    ...config.answerFields.map((field) => field.columnId),
   ].filter((value): value is string => Boolean(value));
 
   return [...new Set(columnIds)].map((columnId) => escapeGraphQlString(columnId)).join(', ');
@@ -162,6 +165,7 @@ function buildHeaderValues(data: ApplicantInterviewSheetData) {
     ['Applicant', data.fullName],
     ['Phone', data.phone],
     ['Email', data.email],
+    ['Shift pattern', displayValue(data.shiftPattern)],
     ['Role', displayValue(data.role)],
     ['Status', displayValue(data.status)],
     ['Monday Item', data.itemId],
@@ -344,18 +348,15 @@ export function mapApplicantInterviewSheetData(
     fullName,
     phone: displayValue(readColumn(item, config.columns.phone)?.text),
     email: displayValue(readColumn(item, config.columns.email)?.text),
+    shiftPattern: normalizeText(readColumn(item, config.columns.shiftPattern)?.text),
     role: normalizeText(readColumn(item, config.columns.role)?.text),
     status: normalizeText(readColumn(item, config.columns.status)?.text),
     notes: normalizeText(readColumn(item, config.columns.notes)?.text),
     interviewPrompts: DEFAULT_INTERVIEW_PROMPTS,
-    previousAnswers: config.answerField
-      ? [
-          {
-            label: config.answerField.label,
-            answer: displayValue(readColumn(item, config.answerField.columnId)?.text),
-          },
-        ]
-      : [],
+    previousAnswers: config.answerFields.map((field) => ({
+      label: field.label,
+      answer: displayValue(readColumn(item, field.columnId)?.text),
+    })),
   };
 }
 

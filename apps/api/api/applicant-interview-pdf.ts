@@ -43,18 +43,24 @@ function hasValidApiKey(request: VercelRequest) {
   return timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
-function readAnswerField() {
-  const columnId = process.env.APPLICANT_INTERVIEW_PREVIOUS_ANSWER_COLUMN_ID?.trim();
-
-  if (!columnId) {
-    return null;
-  }
-
-  return {
-    label: process.env.APPLICANT_INTERVIEW_PREVIOUS_ANSWER_LABEL?.trim() || 'Existing application answer',
-    columnId,
-  };
-}
+const APPLICANT_INTERVIEW_ANSWER_FIELDS = [
+  {
+    columnId: 'long_text_mm258jxn',
+    label: 'Why do I want to work as a Trade Plate Driver at RAS?',
+  },
+  {
+    columnId: 'long_text_mm2szqwt',
+    label: 'What would you do if you were stuck in traffic and were going to be late to a collection or drop off?',
+  },
+  {
+    columnId: 'long_text_mm2s1p6e',
+    label: 'What are the two main ways to check the oil level of a vehicle?',
+  },
+  {
+    columnId: 'long_text_mm2sgyxm',
+    label: 'Where in a vehicle would you find the parcel shelf?',
+  },
+] as const;
 
 function getInterviewSheetConfig(): ApplicantInterviewSheetConfig {
   return {
@@ -65,11 +71,12 @@ function getInterviewSheetConfig(): ApplicantInterviewSheetConfig {
       lastName: readEnv('APPLICANT_INTERVIEW_LAST_NAME_COLUMN_ID'),
       phone: readEnv('APPLICANT_INTERVIEW_PHONE_COLUMN_ID'),
       email: readEnv('APPLICANT_INTERVIEW_EMAIL_COLUMN_ID'),
+      shiftPattern: 'dropdown_mm09fzwe',
       role: process.env.APPLICANT_INTERVIEW_ROLE_COLUMN_ID?.trim(),
       status: process.env.APPLICANT_INTERVIEW_STATUS_COLUMN_ID?.trim(),
       notes: process.env.APPLICANT_INTERVIEW_NOTES_COLUMN_ID?.trim(),
     },
-    answerField: readAnswerField(),
+    answerFields: [...APPLICANT_INTERVIEW_ANSWER_FIELDS],
   };
 }
 

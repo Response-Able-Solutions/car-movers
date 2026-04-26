@@ -20,11 +20,15 @@ const config: ApplicantInterviewSheetConfig = {
     lastName: 'last_name',
     phone: 'phone',
     email: 'email',
+    shiftPattern: 'shift_pattern',
     role: 'role',
     status: 'status',
     notes: 'notes',
   },
-  answerField: { label: 'Existing application answer', columnId: 'why_role' },
+  answerFields: [
+    { label: 'Why do you want this role?', columnId: 'why_role' },
+    { label: 'When can you start?', columnId: 'start_date' },
+  ],
 };
 
 function buildItem(overrides?: Partial<MondayItem>): MondayItem {
@@ -37,6 +41,7 @@ function buildItem(overrides?: Partial<MondayItem>): MondayItem {
       { id: 'last_name', text: 'Driver', value: '"Driver"' },
       { id: 'phone', text: '+44 7700 900123', value: '"+44 7700 900123"' },
       { id: 'email', text: 'alex@example.com', value: '"alex@example.com"' },
+      { id: 'shift_pattern', text: 'MONDAY, TUESDAY, WEDNESDAY', value: '["MONDAY","TUESDAY","WEDNESDAY"]' },
       { id: 'role', text: 'Phone Interview', value: '"Phone Interview"' },
       { id: 'status', text: 'Applied', value: '"Applied"' },
       { id: 'notes', text: 'Strong application, available immediately.', value: '"Strong application, available immediately."' },
@@ -62,9 +67,11 @@ test('mapApplicantInterviewSheetData normalizes missing optional values', () => 
   assert.equal(data.fullName, 'Fallback Name');
   assert.equal(data.phone, 'Not provided');
   assert.equal(data.email, 'alex@example.com');
+  assert.equal(data.shiftPattern, null);
   assert.equal(data.role, null);
-  assert.equal(data.previousAnswers.length, 1);
+  assert.equal(data.previousAnswers.length, 2);
   assert.equal(data.previousAnswers[0]?.answer, 'Not provided');
+  assert.equal(data.previousAnswers[1]?.answer, 'Not provided');
 });
 
 test('fetchApplicantInterviewItem surfaces monday GraphQL failures', async () => {

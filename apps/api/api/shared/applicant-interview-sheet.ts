@@ -162,13 +162,10 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
 
 function buildHeaderValues(data: ApplicantInterviewSheetData) {
   return [
-    ['Applicant', data.fullName],
-    ['Phone', data.phone],
-    ['Email', data.email],
-    ['Shift pattern', displayValue(data.shiftPattern)],
-    ['Role', displayValue(data.role)],
-    ['Status', displayValue(data.status)],
-    ['Monday Item', data.itemId],
+    ['Applicant', data.fullName, 220],
+    ['Phone', data.phone, 132],
+    ['Email', data.email, 148],
+    ['Shift pattern', displayValue(data.shiftPattern), 148],
   ] as const;
 }
 
@@ -204,35 +201,43 @@ function createPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont }) {
   const page = doc.addPage([PAGE.width, PAGE.height]);
   page.drawRectangle({
     x: 0,
-    y: PAGE.height - 112,
+    y: PAGE.height - 156,
     width: PAGE.width,
-    height: 112,
-    color: rgb(0.92, 0.97, 1),
+    height: 156,
+    color: rgb(0.95, 0.98, 1),
   });
-  page.drawLine({
-    start: { x: PAGE.marginX, y: PAGE.height - 118 },
-    end: { x: PAGE.width - PAGE.marginX, y: PAGE.height - 118 },
-    thickness: 1,
-    color: rgb(0.16, 0.45, 0.77),
+  page.drawRectangle({
+    x: 0,
+    y: PAGE.height - 12,
+    width: PAGE.width,
+    height: 12,
+    color: rgb(0.09, 0.39, 0.72),
   });
   page.drawText('Applicant Interview Sheet', {
     x: PAGE.marginX,
-    y: PAGE.height - 74,
-    size: FONT.title,
+    y: PAGE.height - 66,
+    size: 21,
     font: fonts.bold,
-    color: rgb(0.06, 0.2, 0.37),
+    color: rgb(0.05, 0.18, 0.34),
+  });
+  page.drawText('Structured internal briefing for live phone interviews', {
+    x: PAGE.marginX,
+    y: PAGE.height - 88,
+    size: FONT.body,
+    font: fonts.body,
+    color: rgb(0.28, 0.39, 0.52),
   });
   page.drawText('Internal use only', {
     x: PAGE.marginX,
-    y: PAGE.height - 94,
+    y: PAGE.height - 108,
     size: FONT.small,
-    font: fonts.body,
-    color: rgb(0.28, 0.39, 0.52),
+    font: fonts.bold,
+    color: rgb(0.09, 0.39, 0.72),
   });
 
   return {
     page,
-    y: PAGE.height - 142,
+    y: PAGE.height - 182,
   };
 }
 
@@ -252,7 +257,7 @@ async function drawLogo(
 
     page.drawImage(image, {
       x: PAGE.width - PAGE.marginX - image.width * scale,
-      y: PAGE.height - 94,
+      y: PAGE.height - 112,
       width: image.width * scale,
       height: image.height * scale,
     });
@@ -291,8 +296,36 @@ function drawSectionTitle(
 
   return {
     page: nextState.page,
-    y: nextState.y - 18,
+    y: nextState.y - 20,
   };
+}
+
+function drawInfoCard(
+  page: PDFPage,
+  fonts: { body: PDFFont; bold: PDFFont },
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  width: number,
+) {
+  page.drawRectangle({
+    x,
+    y: y - 42,
+    width,
+    height: 42,
+    color: rgb(1, 1, 1),
+    borderColor: rgb(0.85, 0.91, 0.96),
+    borderWidth: 1,
+  });
+  page.drawText(label.toUpperCase(), {
+    x: x + 12,
+    y: y - 14,
+    size: 7.5,
+    font: fonts.bold,
+    color: rgb(0.43, 0.54, 0.66),
+  });
+  drawWrappedBlock(page, fonts.body, value, x + 12, y - 28, width - 24, FONT.body, rgb(0.11, 0.18, 0.27));
 }
 
 export async function fetchApplicantInterviewItem(
@@ -381,67 +414,61 @@ export async function buildApplicantInterviewPdf(
 
   let state = createPage(doc, fonts);
   await drawLogo(doc, state.page, options?.logoBytes);
-
-  const columnGap = 24;
-  const columnWidth = (PAGE.width - PAGE.marginX * 2 - columnGap) / 2;
-  const leftX = PAGE.marginX;
-  const rightX = PAGE.marginX + columnWidth + columnGap;
   const headerEntries = buildHeaderValues(data);
+  let cardX = PAGE.marginX;
 
-  let leftY = state.y;
-  let rightY = state.y;
-
-  for (const [label, value] of headerEntries.slice(0, 3)) {
-    state.page.drawText(label, {
-      x: leftX,
-      y: leftY,
-      size: FONT.small,
-      font: boldFont,
-      color: rgb(0.28, 0.39, 0.52),
-    });
-    leftY = drawWrappedBlock(state.page, bodyFont, value, leftX, leftY - 14, columnWidth, FONT.body) - 8;
+  for (const [label, value, width] of headerEntries) {
+    drawInfoCard(state.page, fonts, label, value, cardX, state.y, width);
+    cardX += width + 12;
   }
 
-  for (const [label, value] of headerEntries.slice(3)) {
-    state.page.drawText(label, {
-      x: rightX,
-      y: rightY,
-      size: FONT.small,
-      font: boldFont,
-      color: rgb(0.28, 0.39, 0.52),
-    });
-    rightY = drawWrappedBlock(state.page, bodyFont, value, rightX, rightY - 14, columnWidth, FONT.body) - 8;
-  }
-
-  state.y = Math.min(leftY, rightY) - 4;
+  state.y -= 60;
 
   state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
-  for (const prompt of data.interviewPrompts) {
-    state = ensureSpace(doc, state, fonts, 36);
-    state.page.drawText('\u2022', {
+  for (const [index, prompt] of data.interviewPrompts.entries()) {
+    state = ensureSpace(doc, state, fonts, 40);
+    state.page.drawRectangle({
       x: PAGE.marginX,
-      y: state.y,
-      size: FONT.body,
+      y: state.y - 4,
+      width: 18,
+      height: 18,
+      color: rgb(0.91, 0.96, 1),
+      borderColor: rgb(0.74, 0.86, 0.97),
+      borderWidth: 1,
+    });
+    state.page.drawText(String(index + 1), {
+      x: PAGE.marginX + 6,
+      y: state.y + 1,
+      size: 9,
       font: boldFont,
-      color: rgb(0.09, 0.26, 0.46),
+      color: rgb(0.09, 0.39, 0.72),
     });
     state.y =
       drawWrappedBlock(
         state.page,
         bodyFont,
         prompt,
-        PAGE.marginX + 14,
+        PAGE.marginX + 28,
         state.y,
-        PAGE.width - PAGE.marginX * 2 - 14,
+        PAGE.width - PAGE.marginX * 2 - 28,
       ) - 7;
   }
 
   state = drawSectionTitle(doc, state, fonts, 'Existing application answers');
   for (const answer of data.previousAnswers) {
-    state = ensureSpace(doc, state, fonts, 46);
-    state.page.drawText(answer.label, {
+    state = ensureSpace(doc, state, fonts, 72);
+    state.page.drawRectangle({
       x: PAGE.marginX,
-      y: state.y,
+      y: state.y - 56,
+      width: PAGE.width - PAGE.marginX * 2,
+      height: 56,
+      color: rgb(0.985, 0.99, 1),
+      borderColor: rgb(0.86, 0.91, 0.96),
+      borderWidth: 1,
+    });
+    state.page.drawText(answer.label, {
+      x: PAGE.marginX + 12,
+      y: state.y - 14,
       size: FONT.small,
       font: boldFont,
       color: rgb(0.28, 0.39, 0.52),
@@ -451,24 +478,33 @@ export async function buildApplicantInterviewPdf(
         state.page,
         bodyFont,
         answer.answer,
-        PAGE.marginX,
-        state.y - 14,
-        PAGE.width - PAGE.marginX * 2,
-      ) - 9;
+        PAGE.marginX + 12,
+        state.y - 30,
+        PAGE.width - PAGE.marginX * 2 - 24,
+      ) - 14;
   }
 
   if (data.notes) {
     state = drawSectionTitle(doc, state, fonts, 'Application notes');
     state = ensureSpace(doc, state, fonts, 60);
+    state.page.drawRectangle({
+      x: PAGE.marginX,
+      y: state.y - 52,
+      width: PAGE.width - PAGE.marginX * 2,
+      height: 52,
+      color: rgb(1, 1, 1),
+      borderColor: rgb(0.86, 0.91, 0.96),
+      borderWidth: 1,
+    });
     state.y =
       drawWrappedBlock(
         state.page,
         bodyFont,
         data.notes,
-        PAGE.marginX,
-        state.y,
-        PAGE.width - PAGE.marginX * 2,
-      ) - 6;
+        PAGE.marginX + 12,
+        state.y - 16,
+        PAGE.width - PAGE.marginX * 2 - 24,
+      ) - 12;
   }
 
   return Buffer.from(await doc.save());

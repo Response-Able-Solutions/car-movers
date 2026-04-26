@@ -85,7 +85,6 @@ const COLOR = {
   sheet: rgb(0.984, 0.995, 1),
   line: rgb(0.737, 0.882, 0.98),
   muted: rgb(0.365, 0.482, 0.588),
-  answerFill: rgb(0.963, 0.989, 1),
 };
 
 const LAYOUT = {
@@ -95,8 +94,7 @@ const LAYOUT = {
   cardGap: 12,
   cardRowGap: 12,
   sectionBlockGap: 16,
-  promptGap: 14,
-  answerGap: 14,
+  answerGap: 18,
 };
 
 export const DEFAULT_INTERVIEW_PROMPTS = [
@@ -323,7 +321,7 @@ function createCoverPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont
     color: COLOR.ink,
   });
   page.drawText('For internal use only', {
-    x: PAGE.marginX,
+    x: PAGE.marginX + 10,
     y: PAGE.height - 152,
     size: FONT.small,
     font: fonts.bold,
@@ -600,50 +598,15 @@ export async function buildApplicantInterviewPdf(
 
   state.y -= LAYOUT.sectionBlockGap;
 
-  state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
-  for (const prompt of data.interviewPrompts) {
-    const promptWidth = PAGE.width - PAGE.marginX * 2;
-    const promptHeight = measureWrappedTextHeight(prompt, bodyFont, FONT.body, promptWidth);
-    const requiredHeight = promptHeight + 2;
-    state = ensureSpace(doc, state, fonts, requiredHeight);
-    state.y =
-      drawWrappedBlock(
-        state.page,
-        bodyFont,
-        prompt,
-        PAGE.marginX,
-        state.y - 1,
-        promptWidth,
-      ) - LAYOUT.promptGap;
-  }
-
-  state.y -= 2;
   state = drawSectionTitle(doc, state, fonts, 'Existing application answers');
   for (const answer of data.previousAnswers) {
     const answerWidth = PAGE.width - PAGE.marginX * 2 - 24;
     const answerHeight = measureWrappedTextHeight(answer.answer, bodyFont, FONT.body, answerWidth);
-    const boxHeight = Math.max(62, 34 + answerHeight);
-    state = ensureSpace(doc, state, fonts, boxHeight + 4);
-    state.page.drawRectangle({
-      x: PAGE.marginX,
-      y: state.y - boxHeight,
-      width: PAGE.width - PAGE.marginX * 2,
-      height: boxHeight,
-      color: COLOR.answerFill,
-      borderColor: COLOR.line,
-      borderWidth: 1,
-    });
-    state.page.drawRectangle({
-      x: PAGE.marginX,
-      y: state.y - boxHeight,
-      width: 5,
-      height: boxHeight,
-      color: COLOR.primary,
-    });
-    drawPill(state.page, PAGE.marginX + 14, state.y - 24, 148, 16, COLOR.surface);
+    const blockHeight = 20 + answerHeight;
+    state = ensureSpace(doc, state, fonts, blockHeight + 4);
     state.page.drawText(answer.label, {
-      x: PAGE.marginX + 24,
-      y: state.y - 18,
+      x: PAGE.marginX,
+      y: state.y - 2,
       size: FONT.small,
       font: boldFont,
       color: COLOR.primaryDark,
@@ -653,9 +616,9 @@ export async function buildApplicantInterviewPdf(
         state.page,
         bodyFont,
         answer.answer,
-        PAGE.marginX + 12,
-        state.y - 34,
-        PAGE.width - PAGE.marginX * 2 - 24,
+        PAGE.marginX,
+        state.y - 20,
+        PAGE.width - PAGE.marginX * 2,
       ) - LAYOUT.answerGap;
   }
 

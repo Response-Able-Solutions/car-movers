@@ -75,6 +75,17 @@ const FONT = {
   lineGap: 3,
 };
 
+const COLOR = {
+  ink: rgb(0.062, 0.192, 0.302),
+  primary: rgb(0.353, 0.635, 0.882),
+  primaryDark: rgb(0.31, 0.573, 0.812),
+  mist: rgb(0.918, 0.957, 0.992),
+  surface: rgb(1, 1, 1),
+  line: rgb(0.816, 0.894, 0.973),
+  muted: rgb(0.388, 0.514, 0.627),
+  answerFill: rgb(0.969, 0.984, 1),
+};
+
 export const DEFAULT_INTERVIEW_PROMPTS = [
   'Confirm the applicant\'s current background and recent work history.',
   'Confirm interest in the role and why they want to work with Response Able Solutions.',
@@ -177,7 +188,7 @@ function drawWrappedBlock(
   y: number,
   maxWidth: number,
   fontSize = FONT.body,
-  color = rgb(0.15, 0.2, 0.28),
+  color = COLOR.ink,
 ) {
   const lines = wrapText(text, font, fontSize, maxWidth);
   const lineHeight = fontSize + FONT.lineGap;
@@ -201,43 +212,66 @@ function createPage(doc: PDFDocument, fonts: { body: PDFFont; bold: PDFFont }) {
   const page = doc.addPage([PAGE.width, PAGE.height]);
   page.drawRectangle({
     x: 0,
-    y: PAGE.height - 156,
+    y: 0,
     width: PAGE.width,
-    height: 156,
-    color: rgb(0.95, 0.98, 1),
+    height: PAGE.height,
+    color: rgb(1, 1, 1),
   });
   page.drawRectangle({
     x: 0,
-    y: PAGE.height - 12,
+    y: PAGE.height - 240,
     width: PAGE.width,
-    height: 12,
-    color: rgb(0.09, 0.39, 0.72),
+    height: 240,
+    color: COLOR.mist,
+  });
+  page.drawRectangle({
+    x: 0,
+    y: PAGE.height - 10,
+    width: PAGE.width,
+    height: 10,
+    color: COLOR.primary,
+  });
+  page.drawRectangle({
+    x: PAGE.marginX,
+    y: PAGE.height - 220,
+    width: PAGE.width - PAGE.marginX * 2,
+    height: 170,
+    color: COLOR.surface,
+    borderColor: rgb(1, 1, 1),
+    borderWidth: 1,
+  });
+  page.drawText('APPLICANT INTERVIEW SHEET', {
+    x: PAGE.marginX,
+    y: PAGE.height - 82,
+    size: 9,
+    font: fonts.bold,
+    color: COLOR.primary,
   });
   page.drawText('Applicant Interview Sheet', {
     x: PAGE.marginX,
-    y: PAGE.height - 66,
-    size: 21,
+    y: PAGE.height - 108,
+    size: 24,
     font: fonts.bold,
-    color: rgb(0.05, 0.18, 0.34),
+    color: COLOR.ink,
   });
   page.drawText('Structured internal briefing for live phone interviews', {
     x: PAGE.marginX,
-    y: PAGE.height - 88,
+    y: PAGE.height - 128,
     size: FONT.body,
     font: fonts.body,
-    color: rgb(0.28, 0.39, 0.52),
+    color: COLOR.muted,
   });
   page.drawText('Internal use only', {
     x: PAGE.marginX,
-    y: PAGE.height - 108,
+    y: PAGE.height - 146,
     size: FONT.small,
     font: fonts.bold,
-    color: rgb(0.09, 0.39, 0.72),
+    color: COLOR.primaryDark,
   });
 
   return {
     page,
-    y: PAGE.height - 182,
+    y: PAGE.height - 188,
   };
 }
 
@@ -257,7 +291,7 @@ async function drawLogo(
 
     page.drawImage(image, {
       x: PAGE.width - PAGE.marginX - image.width * scale,
-      y: PAGE.height - 112,
+      y: PAGE.height - 144,
       width: image.width * scale,
       height: image.height * scale,
     });
@@ -291,7 +325,7 @@ function drawSectionTitle(
     y: nextState.y,
     size: FONT.section,
     font: fonts.bold,
-    color: rgb(0.09, 0.26, 0.46),
+    color: COLOR.ink,
   });
 
   return {
@@ -311,11 +345,11 @@ function drawInfoCard(
 ) {
   page.drawRectangle({
     x,
-    y: y - 42,
+    y: y - 44,
     width,
-    height: 42,
-    color: rgb(1, 1, 1),
-    borderColor: rgb(0.85, 0.91, 0.96),
+    height: 44,
+    color: COLOR.mist,
+    borderColor: COLOR.line,
     borderWidth: 1,
   });
   page.drawText(label.toUpperCase(), {
@@ -323,9 +357,9 @@ function drawInfoCard(
     y: y - 14,
     size: 7.5,
     font: fonts.bold,
-    color: rgb(0.43, 0.54, 0.66),
+    color: COLOR.primaryDark,
   });
-  drawWrappedBlock(page, fonts.body, value, x + 12, y - 28, width - 24, FONT.body, rgb(0.11, 0.18, 0.27));
+  drawWrappedBlock(page, fonts.body, value, x + 12, y - 29, width - 24, FONT.body, COLOR.ink);
 }
 
 export async function fetchApplicantInterviewItem(
@@ -426,7 +460,7 @@ export async function buildApplicantInterviewPdf(
     drawInfoCard(state.page, fonts, label, value, cardX, cardY, cardWidth);
   }
 
-  state.y -= 118;
+  state.y -= 124;
 
   state = drawSectionTitle(doc, state, fonts, 'Interview prompts');
   for (const [index, prompt] of data.interviewPrompts.entries()) {
@@ -436,8 +470,8 @@ export async function buildApplicantInterviewPdf(
       y: state.y - 4,
       width: 18,
       height: 18,
-      color: rgb(0.91, 0.96, 1),
-      borderColor: rgb(0.74, 0.86, 0.97),
+      color: COLOR.mist,
+      borderColor: COLOR.line,
       borderWidth: 1,
     });
     state.page.drawText(String(index + 1), {
@@ -445,7 +479,7 @@ export async function buildApplicantInterviewPdf(
       y: state.y + 1,
       size: 9,
       font: boldFont,
-      color: rgb(0.09, 0.39, 0.72),
+      color: COLOR.primaryDark,
     });
     state.y =
       drawWrappedBlock(
@@ -466,8 +500,8 @@ export async function buildApplicantInterviewPdf(
       y: state.y - 56,
       width: PAGE.width - PAGE.marginX * 2,
       height: 56,
-      color: rgb(0.985, 0.99, 1),
-      borderColor: rgb(0.86, 0.91, 0.96),
+      color: COLOR.answerFill,
+      borderColor: COLOR.line,
       borderWidth: 1,
     });
     state.page.drawText(answer.label, {
@@ -475,7 +509,7 @@ export async function buildApplicantInterviewPdf(
       y: state.y - 14,
       size: FONT.small,
       font: boldFont,
-      color: rgb(0.28, 0.39, 0.52),
+      color: COLOR.primaryDark,
     });
     state.y =
       drawWrappedBlock(
@@ -496,8 +530,8 @@ export async function buildApplicantInterviewPdf(
       y: state.y - 52,
       width: PAGE.width - PAGE.marginX * 2,
       height: 52,
-      color: rgb(1, 1, 1),
-      borderColor: rgb(0.86, 0.91, 0.96),
+      color: COLOR.surface,
+      borderColor: COLOR.line,
       borderWidth: 1,
     });
     state.y =

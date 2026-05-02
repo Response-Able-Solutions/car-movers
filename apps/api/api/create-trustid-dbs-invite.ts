@@ -64,6 +64,22 @@ function getCallbackBaseUrl(request: VercelRequest) {
   return process.env.TRUSTID_CALLBACK_BASE_URL?.trim() || getRequestBaseUrl(request);
 }
 
+function readOptionalNumberEnv(name: string) {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`${name} must be an integer`);
+  }
+
+  return parsed;
+}
+
 function getTrustIdDbsKickoffConfig(request: VercelRequest): TrustIdDbsKickoffConfig {
   return {
     monday: {
@@ -89,6 +105,7 @@ function getTrustIdDbsKickoffConfig(request: VercelRequest): TrustIdDbsKickoffCo
       password: readEnv('TRUSTID_PASSWORD'),
       deviceId: readEnv('TRUSTID_DEVICE_ID'),
       branchId: readEnv('TRUSTID_BRANCH_ID'),
+      digitalIdentificationScheme: readOptionalNumberEnv('TRUSTID_DBS_DIGITAL_IDENTIFICATION_SCHEME'),
     },
     callbackBaseUrl: getCallbackBaseUrl(request),
   };

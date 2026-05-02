@@ -23,6 +23,7 @@ export const TRUST_ID_DBS_RESULT_RECEIVED_STATUS = 'TrustID Result Received';
 export const TRUST_ID_DBS_SUBMITTED_STATUS = 'TrustID DBS Submitted';
 export const TRUST_ID_DBS_ERROR_STATUS = 'TrustID DBS Error';
 export const TRUST_ID_DBS_INVITE_ACTIVE_DAYS = 14;
+export const TRUST_ID_DBS_BASIC_DIGITAL_IDENTIFICATION_SCHEME = 32;
 export const TRUST_ID_DBS_FINAL_FAILED_STATUSES = [
   'TrustID Result Failed',
   'TrustID DBS Failed',
@@ -37,6 +38,7 @@ export type TrustIdDbsKickoffConfig = {
   monday: MondayDbsBoardConfig;
   trustId: TrustIdAuthenticatedConfig & {
     branchId: string;
+    digitalIdentificationScheme?: number;
   };
   callbackBaseUrl: string;
   now?: () => Date;
@@ -189,6 +191,8 @@ function buildGuestLinkRequest(
     branchId: config.trustId.branchId,
     clientApplicationReference: item.itemId,
     containerEventCallbackUrl: buildTrustIdDbsCallbackUrl(config.callbackBaseUrl, item.itemId),
+    digitalIdentificationScheme:
+      config.trustId.digitalIdentificationScheme ?? TRUST_ID_DBS_BASIC_DIGITAL_IDENTIFICATION_SCHEME,
     sendEmail: true,
   };
 }

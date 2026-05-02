@@ -7,6 +7,7 @@ import {
   createTrustIdDbsInvite,
   extractTrustIdDbsCallbackRequest,
   processTrustIdDbsCallback,
+  TRUST_ID_DBS_BASIC_DIGITAL_IDENTIFICATION_SCHEME,
   TRUST_ID_DBS_INVITE_BLOCKED_STATUS,
   TRUST_ID_DBS_INVITE_ERROR_STATUS,
   TRUST_ID_DBS_INVITE_SENT_STATUS,
@@ -178,6 +179,7 @@ test('createTrustIdDbsInvite creates guest link and updates DBS board', async ()
     branchId: 'branch-123',
     clientApplicationReference: '12345',
     containerEventCallbackUrl: 'https://api.example.com/api/trustid-dbs-callback?mondayItemId=12345',
+    digitalIdentificationScheme: TRUST_ID_DBS_BASIC_DIGITAL_IDENTIFICATION_SCHEME,
     sendEmail: true,
   });
   assert.deepEqual(capturedUpdate, {
@@ -197,6 +199,35 @@ test('createTrustIdDbsInvite creates guest link and updates DBS board', async ()
     inviteCreatedAt: '2026-05-02T10:00:00.000Z',
     status: TRUST_ID_DBS_INVITE_SENT_STATUS,
   });
+});
+
+test('createTrustIdDbsInvite uses configured TrustID DBS scheme when provided', async () => {
+  let capturedGuestLinkRequest: TrustIdCreateGuestLinkRequest | undefined;
+
+  await createTrustIdDbsInvite(
+    { mondayItemId: '12345' },
+    {
+      ...config,
+      trustId: {
+        ...config.trustId,
+        digitalIdentificationScheme: 99,
+      },
+    },
+    {
+      fetchMondayDbsItem: async () => dbsItem,
+      createTrustIdGuestLink: async (request) => {
+        capturedGuestLinkRequest = request;
+        return {
+          Success: true,
+          ContainerId: 'container-123',
+          GuestId: 'guest-123',
+        };
+      },
+      updateMondayDbsItem: async () => ({ change_multiple_column_values: { id: '12345' } }),
+    },
+  );
+
+  assert.equal(capturedGuestLinkRequest?.digitalIdentificationScheme, 99);
 });
 
 test('createTrustIdDbsInvite writes TrustID failure details to Monday when item is known', async () => {

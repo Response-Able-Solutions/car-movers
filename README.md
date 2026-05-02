@@ -121,6 +121,112 @@ Notes:
 - The TrustID DBS callback workflow submits Basic DBS only. The required evidence, consent, original document, address, and date-of-birth confirmations are sent as accepted for v1.
 - TrustID DBS callback processing is idempotent for known states. Already submitted items and in-progress items return HTTP 200 without submitting another Basic DBS check; error states remain retryable.
 
+## TrustID Basic DBS setup
+
+The TrustID DBS integration is Basic DBS only. Standard and Enhanced DBS checks are not supported by this workflow.
+
+### Runtime flow
+
+1. A monday.com automation creates a DBS board item after the relevant main-board driver status change.
+2. The DBS board item triggers `POST /api/create-trustid-dbs-invite` with `{ "mondayItemId": "12345" }` and the `x-api-key` header.
+3. The API reads the DBS board item, creates a TrustID guest link, and lets TrustID send the applicant invitation email.
+4. TrustID calls `POST /api/trustid-dbs-callback?mondayItemId=12345` when the final result notification is available.
+5. The API retrieves TrustID result content, initiates the Basic DBS check, and writes the DBS reference or error details back to the DBS board.
+
+### TrustID configuration
+
+Required TrustID environment variables:
+
+```bash
+TRUSTID_BASE_URL=https://sandbox.trustid.co.uk
+TRUSTID_API_KEY=your_trustid_api_key
+TRUSTID_USERNAME=your_trustid_api_username
+TRUSTID_PASSWORD=your_trustid_api_password
+TRUSTID_DEVICE_ID=your_stable_device_id
+TRUSTID_BRANCH_ID=your_trustid_branch_id
+TRUSTID_CALLBACK_BASE_URL=https://your-api-host
+TRUSTID_DBS_EMPLOYER_NAME=Car Movers
+TRUSTID_DBS_EVIDENCE_CHECKED_BY=your_evidence_checker_name
+TRUSTID_DBS_EMPLOYMENT_SECTOR=DRIVERS
+TRUSTID_DBS_PURPOSE_OF_CHECK=Employment
+TRUSTID_DBS_OTHER=
+```
+
+`TRUSTID_CALLBACK_BASE_URL` is used to build the dynamic callback URL passed to TrustID when creating the guest link. If it is omitted, the invite endpoint derives the callback base URL from the incoming request host.
+
+Sandbox and production are separate TrustID environments. Sandbox credentials and base URL must not be reused in production. The sandbox credentials shared during planning should be treated as exposed and reset/rotated before deployment or wider sharing.
+
+### Webhook mode
+
+This integration uses TrustID dynamic callback URLs for v1. The callback URL is passed in the guest-link request and includes the DBS monday item ID for correlation.
+
+Dynamic callbacks only provide the final `ResultNotification` event. Intermediate TrustID events such as `ContainerSubmitted` and `ContainerSentToReview` are intentionally out of scope for v1. Do not configure this integration to depend on both static TrustID webhook URLs and dynamic callback URLs at the same time.
+
+### DBS monday.com board
+
+The DBS board must contain the applicant details required to create a TrustID invite. The API does not fetch name/email from the main driver board during v1 kickoff.
+
+Required DBS board columns:
+
+- Applicant name
+- Applicant email
+- Linked driver/main-board item
+- DBS status
+- TrustID container ID
+- TrustID guest ID
+- Invite created timestamp
+- DBS reference
+- Error/details
+- Processing timestamp
+
+Required DBS board environment variables:
+
+```bash
+DBS_BOARD_ID=your_dbs_board_id
+DBS_APPLICANT_NAME_COLUMN_ID=text_applicant_name
+DBS_APPLICANT_EMAIL_COLUMN_ID=email_applicant_email
+DBS_LINKED_DRIVER_ITEM_COLUMN_ID=connect_driver
+DBS_STATUS_COLUMN_ID=color_status
+DBS_TRUSTID_CONTAINER_ID_COLUMN_ID=text_trustid_container
+DBS_TRUSTID_GUEST_ID_COLUMN_ID=text_trustid_guest
+DBS_INVITE_CREATED_AT_COLUMN_ID=date_invite_created
+DBS_REFERENCE_COLUMN_ID=text_dbs_reference
+DBS_ERROR_DETAILS_COLUMN_ID=long_text_error_details
+DBS_PROCESSING_TIMESTAMP_COLUMN_ID=date_processing_timestamp
+```
+
+The workflow writes these status labels:
+
+- `TrustID Invite Sent`
+- `TrustID Invite Active`
+- `TrustID Invite Error`
+- `TrustID Result Received`
+- `TrustID DBS Submitted`
+- `TrustID DBS Error`
+
+### Duplicate and retry behavior
+
+TrustID guest links are treated as active for 14 days after invite creation. The invite endpoint will not create another TrustID guest link while an existing TrustID guest/container ID is active, unless the previous check has a final unsuccessful status.
+
+Callback processing is idempotent for known states:
+
+- `TrustID DBS Submitted` with a DBS reference returns success without submitting another Basic DBS check.
+- `TrustID Result Received` returns success without starting parallel callback work.
+- `TrustID DBS Error` remains retryable.
+
+### Go-live checklist
+
+- Reset or rotate the exposed sandbox password before any shared testing.
+- Confirm the TrustID sandbox flow works end to end with the configured DBS board.
+- Schedule the TrustID go-live call before the desired production launch date.
+- Replace sandbox TrustID credentials and `TRUSTID_BASE_URL` with production values after TrustID issues production access.
+- Confirm the deployed `TRUSTID_CALLBACK_BASE_URL` is public, stable, and points at the API deployment.
+- Confirm TrustID can reach `POST /api/trustid-dbs-callback?mondayItemId=...` and receives HTTP 200 for accepted callbacks.
+- Confirm monday.com automation creates the DBS board item before calling `POST /api/create-trustid-dbs-invite`.
+- Confirm the DBS board columns and env vars match production column IDs.
+- Confirm Basic DBS-only scope with the operations team before launch.
+- Run `yarn test:shared` and `yarn typecheck:api` before deploying.
+
 ## Shared tests
 
 Run the extracted integration module tests with:

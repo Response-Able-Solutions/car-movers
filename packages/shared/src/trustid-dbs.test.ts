@@ -442,6 +442,7 @@ test('processTrustIdDbsCallback retrieves results and initiates Basic DBS', asyn
     },
   ]);
   assert.deepEqual(result, {
+    outcome: 'submitted',
     mondayItemId: '12345',
     trustIdContainerId: 'container-from-callback',
     dbsReference: 'dbs-ref-123',
@@ -473,6 +474,129 @@ test('processTrustIdDbsCallback uses stored Monday container ID when callback om
 
   assert.equal(capturedBasicDbsContainerId, 'container-from-monday');
   assert.equal(result.trustIdContainerId, 'container-from-monday');
+});
+
+test('processTrustIdDbsCallback no-ops when DBS was already submitted', async () => {
+  let trustIdCalled = false;
+  let mondayUpdated = false;
+
+  const result = await processTrustIdDbsCallback(
+    { mondayItemId: '12345', containerId: 'container-123' },
+    callbackConfig,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        status: TRUST_ID_DBS_SUBMITTED_STATUS,
+        trustIdContainerId: 'container-123',
+        dbsReference: 'dbs-ref-123',
+      }),
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayDbsItem: async () => {
+        mondayUpdated = true;
+        return { change_multiple_column_values: { id: '12345' } };
+      },
+      retrieveTrustIdDocumentContainer: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+      retrieveTrustIdDbsForm: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+      initiateTrustIdBasicDbsCheck: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+    },
+  );
+
+  assert.equal(trustIdCalled, false);
+  assert.equal(mondayUpdated, false);
+  assert.deepEqual(result, {
+    outcome: 'already-submitted',
+    mondayItemId: '12345',
+    trustIdContainerId: 'container-123',
+    dbsReference: 'dbs-ref-123',
+    status: TRUST_ID_DBS_SUBMITTED_STATUS,
+  });
+});
+
+test('processTrustIdDbsCallback no-ops when callback processing is already in progress', async () => {
+  let trustIdCalled = false;
+  let mondayUpdated = false;
+
+  const result = await processTrustIdDbsCallback(
+    { mondayItemId: '12345' },
+    callbackConfig,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        status: TRUST_ID_DBS_RESULT_RECEIVED_STATUS,
+        trustIdContainerId: 'container-123',
+      }),
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayDbsItem: async () => {
+        mondayUpdated = true;
+        return { change_multiple_column_values: { id: '12345' } };
+      },
+      retrieveTrustIdDocumentContainer: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+      retrieveTrustIdDbsForm: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+      initiateTrustIdBasicDbsCheck: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+    },
+  );
+
+  assert.equal(trustIdCalled, false);
+  assert.equal(mondayUpdated, false);
+  assert.deepEqual(result, {
+    outcome: 'already-processing',
+    mondayItemId: '12345',
+    trustIdContainerId: 'container-123',
+    dbsReference: null,
+    status: TRUST_ID_DBS_RESULT_RECEIVED_STATUS,
+  });
+});
+
+test('processTrustIdDbsCallback retries after transient DBS error', async () => {
+  let trustIdCalled = false;
+
+  const result = await processTrustIdDbsCallback(
+    { mondayItemId: '12345', containerId: 'container-123' },
+    callbackConfig,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        status: TRUST_ID_DBS_ERROR_STATUS,
+        trustIdContainerId: 'container-123',
+        errorDetails: 'Previous transient failure',
+      }),
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayDbsItem: async () => ({ change_multiple_column_values: { id: '12345' } }),
+      retrieveTrustIdDocumentContainer: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+      retrieveTrustIdDbsForm: async () => ({ Success: true }),
+      initiateTrustIdBasicDbsCheck: async () => ({
+        Success: true,
+        DbsCheckResult: {
+          DBSReference: 'dbs-ref-123',
+        },
+      }),
+    },
+  );
+
+  assert.equal(trustIdCalled, true);
+  assert.equal(result.outcome, 'submitted');
+  assert.equal(result.dbsReference, 'dbs-ref-123');
 });
 
 test('processTrustIdDbsCallback rejects missing monday item ID', async () => {

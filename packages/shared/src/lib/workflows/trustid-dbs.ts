@@ -87,11 +87,22 @@ export type TrustIdDbsCallbackConfig = {
 };
 
 export type TrustIdDbsCallbackResult = {
+  outcome: 'submitted';
   mondayItemId: string;
   trustIdContainerId: string;
   dbsReference: string | null;
   status: typeof TRUST_ID_DBS_SUBMITTED_STATUS;
 };
+
+export type TrustIdDbsCallbackAlreadyProcessedResult = {
+  outcome: 'already-submitted' | 'already-processing';
+  mondayItemId: string;
+  trustIdContainerId: string;
+  dbsReference: string | null;
+  status: typeof TRUST_ID_DBS_SUBMITTED_STATUS | typeof TRUST_ID_DBS_RESULT_RECEIVED_STATUS;
+};
+
+export type TrustIdDbsCallbackProcessingResult = TrustIdDbsCallbackResult | TrustIdDbsCallbackAlreadyProcessedResult;
 
 type TrustIdDbsWorkflowDependencies = {
   fetchMondayDbsItem: typeof fetchMondayDbsItem;
@@ -286,6 +297,41 @@ function resolveCallbackContainerId(request: TrustIdDbsCallbackRequest, item: Mo
   return request.containerId?.trim() || item.trustIdContainerId?.trim() || item.trustIdGuestId?.trim() || null;
 }
 
+function hasSubmittedDbs(item: MondayDbsItem) {
+  return item.status === TRUST_ID_DBS_SUBMITTED_STATUS && Boolean(item.dbsReference);
+}
+
+function isCallbackProcessing(item: MondayDbsItem) {
+  return item.status === TRUST_ID_DBS_RESULT_RECEIVED_STATUS;
+}
+
+function buildAlreadyProcessedCallbackResult(
+  item: MondayDbsItem,
+  containerId: string,
+): TrustIdDbsCallbackAlreadyProcessedResult | null {
+  if (hasSubmittedDbs(item)) {
+    return {
+      outcome: 'already-submitted',
+      mondayItemId: item.itemId,
+      trustIdContainerId: containerId,
+      dbsReference: item.dbsReference,
+      status: TRUST_ID_DBS_SUBMITTED_STATUS,
+    };
+  }
+
+  if (isCallbackProcessing(item)) {
+    return {
+      outcome: 'already-processing',
+      mondayItemId: item.itemId,
+      trustIdContainerId: containerId,
+      dbsReference: item.dbsReference,
+      status: TRUST_ID_DBS_RESULT_RECEIVED_STATUS,
+    };
+  }
+
+  return null;
+}
+
 export function extractTrustIdDbsCallbackRequest(
   query: Record<string, string | string[] | undefined>,
   body: Record<string, unknown> | undefined,
@@ -412,7 +458,7 @@ export async function processTrustIdDbsCallback(
   request: Partial<TrustIdDbsCallbackRequest>,
   config: TrustIdDbsCallbackConfig,
   dependencies = defaultDependencies,
-): Promise<TrustIdDbsCallbackResult> {
+): Promise<TrustIdDbsCallbackProcessingResult> {
   const callbackRequest = validateTrustIdDbsCallbackRequest(request);
   const item = await dependencies.fetchMondayDbsItem(callbackRequest.mondayItemId, config.monday);
   const containerId = resolveCallbackContainerId(callbackRequest, item);
@@ -420,6 +466,12 @@ export async function processTrustIdDbsCallback(
   try {
     if (!containerId) {
       throw new TrustIdDbsCallbackValidationError('Missing TrustID container ID');
+    }
+
+    const alreadyProcessedResult = buildAlreadyProcessedCallbackResult(item, containerId);
+
+    if (alreadyProcessedResult) {
+      return alreadyProcessedResult;
     }
 
     await dependencies.updateMondayDbsItem(
@@ -460,6 +512,7 @@ export async function processTrustIdDbsCallback(
     );
 
     return {
+      outcome: 'submitted',
       mondayItemId: item.itemId,
       trustIdContainerId: containerId,
       dbsReference,

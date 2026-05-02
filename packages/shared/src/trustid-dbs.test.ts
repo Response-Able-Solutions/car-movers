@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildTrustIdDbsCallbackUrl,
   createTrustIdDbsInvite,
+  TRUST_ID_DBS_INVITE_BLOCKED_STATUS,
   TRUST_ID_DBS_INVITE_ERROR_STATUS,
   TRUST_ID_DBS_INVITE_SENT_STATUS,
   TrustIdDbsKickoffValidationError,
@@ -111,6 +112,7 @@ test('createTrustIdDbsInvite creates guest link and updates DBS board', async ()
     processingTimestamp: '2026-05-02T10:00:00.000Z',
   });
   assert.deepEqual(result, {
+    outcome: 'created',
     mondayItemId: '12345',
     applicantEmail: 'driver@example.com',
     trustIdContainerId: 'container-123',
@@ -147,4 +149,143 @@ test('createTrustIdDbsInvite writes TrustID failure details to Monday when item 
     errorDetails: 'TrustID unavailable',
     processingTimestamp: '2026-05-02T10:00:00.000Z',
   });
+});
+
+test('createTrustIdDbsInvite blocks active duplicate invite', async () => {
+  let trustIdCalled = false;
+  let capturedUpdate: MondayDbsItemUpdates | undefined;
+
+  const result = await createTrustIdDbsInvite(
+    { mondayItemId: '12345' },
+    config,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        trustIdContainerId: 'container-123',
+        trustIdGuestId: 'guest-123',
+        inviteCreatedAt: '2026-05-01T10:00:00.000Z',
+      }),
+      createTrustIdGuestLink: async () => {
+        trustIdCalled = true;
+        return {
+          Success: true,
+          ContainerId: 'new-container',
+          GuestId: 'new-guest',
+        };
+      },
+      updateMondayDbsItem: async (_itemId, updates) => {
+        capturedUpdate = updates;
+        return { change_multiple_column_values: { id: '12345' } };
+      },
+    },
+  );
+
+  assert.equal(trustIdCalled, false);
+  assert.deepEqual(capturedUpdate, {
+    status: TRUST_ID_DBS_INVITE_BLOCKED_STATUS,
+    errorDetails: 'TrustID invite is still active until 2026-05-15T10:00:00.000Z',
+    processingTimestamp: '2026-05-02T10:00:00.000Z',
+  });
+  assert.deepEqual(result, {
+    outcome: 'blocked',
+    mondayItemId: '12345',
+    applicantEmail: 'driver@example.com',
+    trustIdContainerId: 'container-123',
+    trustIdGuestId: 'guest-123',
+    inviteCreatedAt: '2026-05-01T10:00:00.000Z',
+    status: TRUST_ID_DBS_INVITE_BLOCKED_STATUS,
+    reason: 'TrustID invite is still active until 2026-05-15T10:00:00.000Z',
+  });
+});
+
+test('createTrustIdDbsInvite blocks existing invite with missing timestamp', async () => {
+  let trustIdCalled = false;
+  let capturedUpdate: MondayDbsItemUpdates | undefined;
+
+  const result = await createTrustIdDbsInvite(
+    { mondayItemId: '12345' },
+    config,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        trustIdContainerId: 'container-123',
+        inviteCreatedAt: null,
+      }),
+      createTrustIdGuestLink: async () => {
+        trustIdCalled = true;
+        return {
+          Success: true,
+          ContainerId: 'new-container',
+        };
+      },
+      updateMondayDbsItem: async (_itemId, updates) => {
+        capturedUpdate = updates;
+        return { change_multiple_column_values: { id: '12345' } };
+      },
+    },
+  );
+
+  assert.equal(trustIdCalled, false);
+  assert.equal(capturedUpdate?.status, TRUST_ID_DBS_INVITE_BLOCKED_STATUS);
+  assert.equal(capturedUpdate?.errorDetails, 'TrustID invite already exists but invite creation time is missing or invalid');
+  assert.equal(result.outcome, 'blocked');
+});
+
+test('createTrustIdDbsInvite allows new invite after 14 day expiry', async () => {
+  let trustIdCalled = false;
+
+  const result = await createTrustIdDbsInvite(
+    { mondayItemId: '12345' },
+    config,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        trustIdContainerId: 'container-123',
+        inviteCreatedAt: '2026-04-17T09:59:59.000Z',
+      }),
+      createTrustIdGuestLink: async () => {
+        trustIdCalled = true;
+        return {
+          Success: true,
+          ContainerId: 'new-container',
+          GuestId: 'new-guest',
+        };
+      },
+      updateMondayDbsItem: async () => ({ change_multiple_column_values: { id: '12345' } }),
+    },
+  );
+
+  assert.equal(trustIdCalled, true);
+  assert.equal(result.outcome, 'created');
+  assert.equal(result.trustIdContainerId, 'new-container');
+});
+
+test('createTrustIdDbsInvite allows new invite after final unsuccessful result', async () => {
+  let trustIdCalled = false;
+
+  const result = await createTrustIdDbsInvite(
+    { mondayItemId: '12345' },
+    config,
+    {
+      fetchMondayDbsItem: async () => ({
+        ...dbsItem,
+        status: 'TrustID DBS Failed',
+        trustIdContainerId: 'container-123',
+        inviteCreatedAt: '2026-05-01T10:00:00.000Z',
+      }),
+      createTrustIdGuestLink: async () => {
+        trustIdCalled = true;
+        return {
+          Success: true,
+          ContainerId: 'new-container',
+          GuestId: 'new-guest',
+        };
+      },
+      updateMondayDbsItem: async () => ({ change_multiple_column_values: { id: '12345' } }),
+    },
+  );
+
+  assert.equal(trustIdCalled, true);
+  assert.equal(result.outcome, 'created');
+  assert.equal(result.trustIdContainerId, 'new-container');
 });

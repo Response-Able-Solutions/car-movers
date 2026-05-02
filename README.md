@@ -110,6 +110,7 @@ Notes:
 - The DBS board must store applicant name and applicant email directly because these are required to create a TrustID guest link. The linked driver item column is used for traceability.
 - The DBS board adapter reads and writes TrustID container/guest IDs, invite creation time, DBS reference, error details, status, and processing timestamp through the configured DBS column IDs.
 - `TRUSTID_CALLBACK_BASE_URL` is optional for local testing. If omitted, the TrustID DBS invite endpoint derives the callback base URL from the incoming request host.
+- The TrustID DBS invite workflow blocks duplicate invites while an existing TrustID guest/container ID is active. Guest links are treated as active for 14 days after invite creation unless the DBS item has a final unsuccessful status.
 
 ## Shared tests
 

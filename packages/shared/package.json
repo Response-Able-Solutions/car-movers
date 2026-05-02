@@ -10,6 +10,8 @@
     "./verification": "./src/verification.ts",
     "./idenfy": "./src/idenfy.ts",
     "./monday": "./src/monday.ts",
+    "./lib/adapters/idenfy": "./src/lib/adapters/idenfy.ts",
+    "./lib/adapters/monday": "./src/lib/adapters/monday.ts",
     "./applicant-interview-sheet": "./src/applicant-interview-sheet.ts"
   }
 }

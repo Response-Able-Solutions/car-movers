@@ -6,14 +6,22 @@ import {
 } from '../adapters/monday.ts';
 import {
   createTrustIdGuestLink,
+  initiateTrustIdBasicDbsCheck,
+  retrieveTrustIdDbsForm,
+  retrieveTrustIdDocumentContainer,
   type TrustIdAuthenticatedConfig,
+  type TrustIdBasicDbsResponse,
   type TrustIdCreateGuestLinkRequest,
   type TrustIdCreateGuestLinkResponse,
+  type TrustIdInitiateBasicDbsCheckRequest,
 } from '../adapters/trustid.ts';
 
 export const TRUST_ID_DBS_INVITE_SENT_STATUS = 'TrustID Invite Sent';
 export const TRUST_ID_DBS_INVITE_ERROR_STATUS = 'TrustID Invite Error';
 export const TRUST_ID_DBS_INVITE_BLOCKED_STATUS = 'TrustID Invite Active';
+export const TRUST_ID_DBS_RESULT_RECEIVED_STATUS = 'TrustID Result Received';
+export const TRUST_ID_DBS_SUBMITTED_STATUS = 'TrustID DBS Submitted';
+export const TRUST_ID_DBS_ERROR_STATUS = 'TrustID DBS Error';
 export const TRUST_ID_DBS_INVITE_ACTIVE_DAYS = 14;
 export const TRUST_ID_DBS_FINAL_FAILED_STATUSES = [
   'TrustID Result Failed',
@@ -57,22 +65,63 @@ export type TrustIdDbsKickoffBlockedResult = {
 
 export type TrustIdDbsKickoffResult = TrustIdDbsKickoffCreatedResult | TrustIdDbsKickoffBlockedResult;
 
+export type TrustIdDbsCallbackRequest = {
+  mondayItemId: string;
+  containerId?: string | null;
+  payload?: Record<string, unknown>;
+};
+
+export type TrustIdDbsBasicCheckConfig = {
+  employerName?: string;
+  evidenceCheckedBy: string;
+  employmentSector: string;
+  purposeOfCheck?: 'Personal Interest' | 'Employment' | 'Other';
+  other?: string;
+};
+
+export type TrustIdDbsCallbackConfig = {
+  monday: MondayDbsBoardConfig;
+  trustId: TrustIdAuthenticatedConfig;
+  basicCheck: TrustIdDbsBasicCheckConfig;
+  now?: () => Date;
+};
+
+export type TrustIdDbsCallbackResult = {
+  mondayItemId: string;
+  trustIdContainerId: string;
+  dbsReference: string | null;
+  status: typeof TRUST_ID_DBS_SUBMITTED_STATUS;
+};
+
 type TrustIdDbsWorkflowDependencies = {
   fetchMondayDbsItem: typeof fetchMondayDbsItem;
   updateMondayDbsItem: typeof updateMondayDbsItem;
   createTrustIdGuestLink: typeof createTrustIdGuestLink;
+  retrieveTrustIdDocumentContainer: typeof retrieveTrustIdDocumentContainer;
+  retrieveTrustIdDbsForm: typeof retrieveTrustIdDbsForm;
+  initiateTrustIdBasicDbsCheck: typeof initiateTrustIdBasicDbsCheck;
 };
 
 const defaultDependencies: TrustIdDbsWorkflowDependencies = {
   fetchMondayDbsItem,
   updateMondayDbsItem,
   createTrustIdGuestLink,
+  retrieveTrustIdDocumentContainer,
+  retrieveTrustIdDbsForm,
+  initiateTrustIdBasicDbsCheck,
 };
 
 export class TrustIdDbsKickoffValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'TrustIdDbsKickoffValidationError';
+  }
+}
+
+export class TrustIdDbsCallbackValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TrustIdDbsCallbackValidationError';
   }
 }
 
@@ -92,7 +141,25 @@ export function validateTrustIdDbsKickoffRequest(request: Partial<TrustIdDbsKick
   return { mondayItemId };
 }
 
+export function validateTrustIdDbsCallbackRequest(request: Partial<TrustIdDbsCallbackRequest>) {
+  const mondayItemId = request.mondayItemId?.trim();
+
+  if (!mondayItemId) {
+    throw new TrustIdDbsCallbackValidationError('Missing mondayItemId');
+  }
+
+  return {
+    mondayItemId,
+    containerId: request.containerId?.trim() || null,
+    payload: request.payload,
+  };
+}
+
 function getInviteCreatedAt(config: TrustIdDbsKickoffConfig) {
+  return (config.now?.() ?? new Date()).toISOString();
+}
+
+function getProcessingTimestamp(config: { now?: () => Date }) {
   return (config.now?.() ?? new Date()).toISOString();
 }
 
@@ -207,6 +274,90 @@ async function writeInviteFailure(
   );
 }
 
+function getDbsReference(response: TrustIdBasicDbsResponse) {
+  return response.DbsCheckResult?.DBSReference?.trim() || null;
+}
+
+function getTrustIdDbsError(response: TrustIdBasicDbsResponse) {
+  return response.DbsCheckResult?.ErrorMessage?.trim() || null;
+}
+
+function resolveCallbackContainerId(request: TrustIdDbsCallbackRequest, item: MondayDbsItem) {
+  return request.containerId?.trim() || item.trustIdContainerId?.trim() || item.trustIdGuestId?.trim() || null;
+}
+
+export function extractTrustIdDbsCallbackRequest(
+  query: Record<string, string | string[] | undefined>,
+  body: Record<string, unknown> | undefined,
+): TrustIdDbsCallbackRequest {
+  const queryMondayItemId = Array.isArray(query.mondayItemId) ? query.mondayItemId[0] : query.mondayItemId;
+  const bodyMondayItemId =
+    typeof body?.mondayItemId === 'string'
+      ? body.mondayItemId
+      : typeof body?.ClientApplicationReference === 'string'
+        ? body.ClientApplicationReference
+        : typeof body?.clientApplicationReference === 'string'
+          ? body.clientApplicationReference
+          : undefined;
+  const bodyContainerId =
+    typeof body?.ContainerId === 'string'
+      ? body.ContainerId
+      : typeof body?.containerId === 'string'
+        ? body.containerId
+        : typeof body?.GuestId === 'string'
+          ? body.GuestId
+          : typeof body?.guestId === 'string'
+            ? body.guestId
+            : undefined;
+
+  return validateTrustIdDbsCallbackRequest({
+    mondayItemId: queryMondayItemId ?? bodyMondayItemId,
+    containerId: bodyContainerId,
+    payload: body,
+  });
+}
+
+export function buildTrustIdBasicDbsRequest(
+  containerId: string,
+  config: TrustIdDbsCallbackConfig,
+): TrustIdInitiateBasicDbsCheckRequest {
+  const now = config.now?.() ?? new Date();
+
+  return {
+    containerId,
+    employerName: config.basicCheck.employerName,
+    candidateOriginalDocumentsChecked: true,
+    candidateAddressChecked: true,
+    candidateDateOfBirthChecked: true,
+    evidenceCheckedBy: config.basicCheck.evidenceCheckedBy,
+    evidenceCheckedDate: `/Date(${now.getTime()})/`,
+    selfDeclarationCheck: true,
+    applicationConsent: true,
+    purposeOfCheck: config.basicCheck.purposeOfCheck ?? 'Employment',
+    employmentSector: config.basicCheck.employmentSector,
+    other: config.basicCheck.other,
+  };
+}
+
+async function writeCallbackFailure(
+  mondayItemId: string,
+  error: unknown,
+  config: TrustIdDbsCallbackConfig,
+  dependencies: TrustIdDbsWorkflowDependencies,
+) {
+  const message = error instanceof Error ? error.message : 'TrustID DBS callback processing failed';
+
+  await dependencies.updateMondayDbsItem(
+    mondayItemId,
+    {
+      status: TRUST_ID_DBS_ERROR_STATUS,
+      errorDetails: message,
+      processingTimestamp: getProcessingTimestamp(config),
+    },
+    config.monday,
+  );
+}
+
 export async function createTrustIdDbsInvite(
   request: Partial<TrustIdDbsKickoffRequest>,
   config: TrustIdDbsKickoffConfig,
@@ -253,6 +404,69 @@ export async function createTrustIdDbsInvite(
     };
   } catch (error) {
     await writeInviteFailure(item.itemId, error, config, dependencies);
+    throw error;
+  }
+}
+
+export async function processTrustIdDbsCallback(
+  request: Partial<TrustIdDbsCallbackRequest>,
+  config: TrustIdDbsCallbackConfig,
+  dependencies = defaultDependencies,
+): Promise<TrustIdDbsCallbackResult> {
+  const callbackRequest = validateTrustIdDbsCallbackRequest(request);
+  const item = await dependencies.fetchMondayDbsItem(callbackRequest.mondayItemId, config.monday);
+  const containerId = resolveCallbackContainerId(callbackRequest, item);
+
+  try {
+    if (!containerId) {
+      throw new TrustIdDbsCallbackValidationError('Missing TrustID container ID');
+    }
+
+    await dependencies.updateMondayDbsItem(
+      item.itemId,
+      {
+        status: TRUST_ID_DBS_RESULT_RECEIVED_STATUS,
+        trustIdContainerId: containerId,
+        errorDetails: null,
+        processingTimestamp: getProcessingTimestamp(config),
+      },
+      config.monday,
+    );
+
+    await dependencies.retrieveTrustIdDocumentContainer({ containerId }, config.trustId);
+    await dependencies.retrieveTrustIdDbsForm({ containerId }, config.trustId);
+
+    const dbsResponse = await dependencies.initiateTrustIdBasicDbsCheck(
+      buildTrustIdBasicDbsRequest(containerId, config),
+      config.trustId,
+    );
+    const dbsReference = getDbsReference(dbsResponse);
+    const dbsError = getTrustIdDbsError(dbsResponse);
+
+    if (dbsError) {
+      throw new Error(dbsError);
+    }
+
+    await dependencies.updateMondayDbsItem(
+      item.itemId,
+      {
+        status: TRUST_ID_DBS_SUBMITTED_STATUS,
+        trustIdContainerId: containerId,
+        dbsReference,
+        errorDetails: null,
+        processingTimestamp: getProcessingTimestamp(config),
+      },
+      config.monday,
+    );
+
+    return {
+      mondayItemId: item.itemId,
+      trustIdContainerId: containerId,
+      dbsReference,
+      status: TRUST_ID_DBS_SUBMITTED_STATUS,
+    };
+  } catch (error) {
+    await writeCallbackFailure(item.itemId, error, config, dependencies);
     throw error;
   }
 }

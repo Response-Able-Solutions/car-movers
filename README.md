@@ -48,6 +48,7 @@ http://localhost:3000/api/create-idenfy-session
 http://localhost:3000/api/idenfy-callback
 http://localhost:3000/api/applicant-interview-pdf?itemId=12345
 http://localhost:3000/api/create-trustid-dbs-invite
+http://localhost:3000/api/trustid-dbs-callback?mondayItemId=12345
 ```
 
 The Vite UI will use `VITE_API_BASE_URL` to call that endpoint.
@@ -77,6 +78,11 @@ TRUSTID_PASSWORD=your_trustid_api_password
 TRUSTID_DEVICE_ID=your_stable_device_id
 TRUSTID_BRANCH_ID=your_trustid_branch_id
 TRUSTID_CALLBACK_BASE_URL=https://your-api-host
+TRUSTID_DBS_EMPLOYER_NAME=Car Movers
+TRUSTID_DBS_EVIDENCE_CHECKED_BY=your_evidence_checker_name
+TRUSTID_DBS_EMPLOYMENT_SECTOR=DRIVERS
+TRUSTID_DBS_PURPOSE_OF_CHECK=Employment
+TRUSTID_DBS_OTHER=
 APPLICANT_INTERVIEW_BOARD_ID=your_applicant_board_id
 APPLICANT_INTERVIEW_FIRST_NAME_COLUMN_ID=text_first_name
 APPLICANT_INTERVIEW_LAST_NAME_COLUMN_ID=text_last_name
@@ -103,6 +109,7 @@ Notes:
 - `IDENFY_CALLBACK_URL` is optional. If omitted, the create-session endpoint derives the callback URL from the incoming request host.
 - `INTERNAL_API_KEY` protects `POST /api/create-idenfy-session` and `GET /api/applicant-interview-pdf` via the `x-api-key` header.
 - `POST /api/create-trustid-dbs-invite` is protected by `INTERNAL_API_KEY` and expects `{ "mondayItemId": "12345" }`.
+- `POST /api/trustid-dbs-callback?mondayItemId=12345` receives TrustID final result notifications, retrieves TrustID result content, initiates the Basic DBS check, and updates the DBS board.
 - The applicant interview PDF endpoint includes the fixed shift-pattern column `dropdown_mm09fzwe` for applicant availability.
 - The applicant interview PDF endpoint has four fixed application-answer mappings checked into code for the current interview questions.
 - The applicant interview PDF endpoint reads from a separate configured monday board and returns a branded `application/pdf` document for one item ID.
@@ -111,6 +118,7 @@ Notes:
 - The DBS board adapter reads and writes TrustID container/guest IDs, invite creation time, DBS reference, error details, status, and processing timestamp through the configured DBS column IDs.
 - `TRUSTID_CALLBACK_BASE_URL` is optional for local testing. If omitted, the TrustID DBS invite endpoint derives the callback base URL from the incoming request host.
 - The TrustID DBS invite workflow blocks duplicate invites while an existing TrustID guest/container ID is active. Guest links are treated as active for 14 days after invite creation unless the DBS item has a final unsuccessful status.
+- The TrustID DBS callback workflow submits Basic DBS only. The required evidence, consent, original document, address, and date-of-birth confirmations are sent as accepted for v1.
 
 ## Shared tests
 

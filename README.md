@@ -48,6 +48,7 @@ http://localhost:3000/api/create-idenfy-session
 http://localhost:3000/api/idenfy-callback
 http://localhost:3000/api/applicant-interview-pdf?itemId=12345
 http://localhost:3000/api/create-trustid-dbs-invite
+http://localhost:3000/api/create-trustid-id-invite
 http://localhost:3000/api/trustid-dbs-callback?mondayItemId=12345
 ```
 
@@ -77,6 +78,8 @@ TRUSTID_USERNAME=your_trustid_api_username
 TRUSTID_PASSWORD=your_trustid_api_password
 TRUSTID_DEVICE_ID=your_stable_device_id
 TRUSTID_BRANCH_ID=your_trustid_branch_id
+TRUSTID_ID_BRANCH_ID=your_trustid_id_branch_id
+TRUSTID_ID_DIGITAL_IDENTIFICATION_SCHEME=
 TRUSTID_CALLBACK_BASE_URL=https://your-api-host
 TRUSTID_DBS_EMPLOYER_NAME=Car Movers
 TRUSTID_DBS_EVIDENCE_CHECKED_BY=your_evidence_checker_name
@@ -102,6 +105,16 @@ DBS_INVITE_CREATED_AT_COLUMN_ID=date_invite_created
 DBS_REFERENCE_COLUMN_ID=text_dbs_reference
 DBS_ERROR_DETAILS_COLUMN_ID=long_text_error_details
 DBS_PROCESSING_TIMESTAMP_COLUMN_ID=date_processing_timestamp
+TRUSTID_ID_BOARD_ID=your_trustid_id_check_board_id
+TRUSTID_ID_APPLICANT_NAME_COLUMN_ID=text_applicant_name
+TRUSTID_ID_APPLICANT_EMAIL_COLUMN_ID=email_applicant_email
+TRUSTID_ID_STATUS_COLUMN_ID=color_status
+TRUSTID_ID_CONTAINER_ID_COLUMN_ID=text_trustid_container
+TRUSTID_ID_GUEST_ID_COLUMN_ID=text_trustid_guest
+TRUSTID_ID_INVITE_CREATED_AT_COLUMN_ID=date_invite_created
+TRUSTID_ID_RESULT_SUMMARY_COLUMN_ID=long_text_result_summary
+TRUSTID_ID_ERROR_DETAILS_COLUMN_ID=long_text_error_details
+TRUSTID_ID_PROCESSING_TIMESTAMP_COLUMN_ID=date_processing_timestamp
 ```
 
 Notes:
@@ -109,6 +122,7 @@ Notes:
 - `IDENFY_CALLBACK_URL` is optional. If omitted, the create-session endpoint derives the callback URL from the incoming request host.
 - `INTERNAL_API_KEY` protects `POST /api/create-idenfy-session` and `GET /api/applicant-interview-pdf` via the `x-api-key` header.
 - `POST /api/create-trustid-dbs-invite` is protected by `INTERNAL_API_KEY` and expects `{ "mondayItemId": "12345" }`.
+- `POST /api/create-trustid-id-invite` is protected by `INTERNAL_API_KEY` and expects `{ "mondayItemId": "12345" }`.
 - `POST /api/trustid-dbs-callback?mondayItemId=12345` receives TrustID final result notifications, retrieves TrustID result content, initiates the Basic DBS check, and updates the DBS board.
 - The applicant interview PDF endpoint includes the fixed shift-pattern column `dropdown_mm09fzwe` for applicant availability.
 - The applicant interview PDF endpoint has four fixed application-answer mappings checked into code for the current interview questions.
@@ -116,8 +130,10 @@ Notes:
 - The callback flow updates monday status column `MONDAY_STATUS_COLUMN_ID` with `ID Verify Success` for final approved outcomes and `ID Verify Review` for final suspected outcomes.
 - The DBS board must store applicant name and applicant email directly because these are required to create a TrustID guest link. The linked driver item column is used for traceability.
 - The DBS board adapter reads and writes TrustID container/guest IDs, invite creation time, DBS reference, error details, status, and processing timestamp through the configured DBS column IDs.
+- The standalone TrustID ID-check invite endpoint reads and writes only the configured ID-check board columns. `TRUSTID_ID_BRANCH_ID` overrides the generic `TRUSTID_BRANCH_ID`, and `TRUSTID_ID_DIGITAL_IDENTIFICATION_SCHEME` is optional.
 - `TRUSTID_CALLBACK_BASE_URL` is optional for local testing. If omitted, the TrustID DBS invite endpoint derives the callback base URL from the incoming request host.
 - The TrustID DBS invite workflow blocks duplicate invites while an existing TrustID guest/container ID is active. Guest links are treated as active for 14 days after invite creation unless the DBS item has a final unsuccessful status.
+- The TrustID ID-check invite workflow uses the same 14-day active guest-link rule, but it stays separate from DBS and does not call DBS APIs.
 - The TrustID DBS callback workflow submits Basic DBS only. The required evidence, consent, original document, address, and date-of-birth confirmations are sent as accepted for v1.
 - TrustID DBS callback processing is idempotent for known states. Already submitted items and in-progress items return HTTP 200 without submitting another Basic DBS check; error states remain retryable.
 

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { DriverRecord, VerificationRequest, VerificationResponse } from '@car-movers/shared/verification';
+import { readEnv } from './shared/endpoint.js';
 
 type MondayColumnValue = {
   id: string;
@@ -25,16 +26,6 @@ type MondayResponse = {
 };
 
 const mondayEndpoint = 'https://api.monday.com/v2';
-
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
-}
 
 function getConfig() {
   return {

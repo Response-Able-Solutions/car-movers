@@ -5,16 +5,7 @@ import {
   TrustIdDbsCallbackValidationError,
   type TrustIdDbsCallbackConfig,
 } from '@car-movers/shared/trustid-dbs';
-
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
-}
+import { readEnv } from './shared/endpoint.js';
 
 function readPurposeOfCheck() {
   const value = process.env.TRUSTID_DBS_PURPOSE_OF_CHECK?.trim();

@@ -389,25 +389,6 @@ export function buildTrustIdBasicDbsRequest(
   };
 }
 
-async function writeCallbackFailure(
-  mondayItemId: string,
-  error: unknown,
-  config: TrustIdDbsCallbackConfig,
-  dependencies: TrustIdDbsWorkflowDependencies,
-) {
-  const message = error instanceof Error ? error.message : 'TrustID DBS callback processing failed';
-
-  await dependencies.updateMondayDbsItem(
-    mondayItemId,
-    {
-      status: TRUST_ID_DBS_ERROR_STATUS,
-      errorDetails: message,
-      processingTimestamp: getProcessingTimestamp(config),
-    },
-    config.monday,
-  );
-}
-
 export async function createTrustIdDbsInvite(
   request: Partial<TrustIdDbsKickoffRequest>,
   config: TrustIdDbsKickoffConfig,
@@ -523,7 +504,18 @@ export async function processTrustIdDbsCallback(
       status: TRUST_ID_DBS_SUBMITTED_STATUS,
     };
   } catch (error) {
-    await writeCallbackFailure(item.itemId, error, config, dependencies);
+    const message = error instanceof Error ? error.message : 'TrustID DBS callback processing failed';
+
+    await dependencies.updateMondayDbsItem(
+      item.itemId,
+      {
+        status: TRUST_ID_DBS_ERROR_STATUS,
+        errorDetails: message,
+        processingTimestamp: getProcessingTimestamp(config),
+      },
+      config.monday,
+    );
+
     throw error;
   }
 }

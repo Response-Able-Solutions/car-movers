@@ -1,14 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
-}
+import { readEnv } from './shared/endpoint.js';
 
 type MondayAssetResponse = {
   assets?: Array<{

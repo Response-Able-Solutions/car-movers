@@ -3,11 +3,19 @@ import assert from 'node:assert/strict';
 
 import {
   createTrustIdIdInvite,
+  extractTrustIdIdCallbackRequest,
+  processTrustIdIdCallback,
+  TRUST_ID_ID_CHECK_ERROR_STATUS,
+  TRUST_ID_ID_CHECK_FAILED_STATUS,
+  TRUST_ID_ID_CHECK_PASSED_STATUS,
+  TRUST_ID_ID_CHECK_REVIEW_STATUS,
   TRUST_ID_ID_INVITE_BLOCKED_STATUS,
   TRUST_ID_ID_INVITE_ERROR_STATUS,
   TRUST_ID_ID_INVITE_SENT_STATUS,
+  TrustIdIdCallbackValidationError,
   TrustIdIdInviteValidationError,
   validateTrustIdIdInviteRequest,
+  type TrustIdIdCallbackConfig,
   type TrustIdIdInviteConfig,
 } from './trustid-id.ts';
 import type { MondayTrustIdIdCheckItem, MondayTrustIdIdCheckItemUpdates } from './monday.ts';
@@ -53,10 +61,57 @@ const config: TrustIdIdInviteConfig = {
   now: () => new Date('2026-05-02T10:00:00.000Z'),
 };
 
+const callbackConfig: TrustIdIdCallbackConfig = {
+  monday: config.monday,
+  trustId: {
+    apiKey: 'trustid-api-key',
+    username: 'trustid-user',
+    password: 'trustid-password',
+    deviceId: 'device-123',
+  },
+  now: () => new Date('2026-05-02T10:00:00.000Z'),
+};
+
 test('validateTrustIdIdInviteRequest rejects missing monday item ID', () => {
   assert.throws(
     () => validateTrustIdIdInviteRequest({ mondayItemId: ' ' }),
     (error: unknown) => error instanceof TrustIdIdInviteValidationError && error.message === 'Missing mondayItemId',
+  );
+});
+
+test('extractTrustIdIdCallbackRequest reads correlation and container fields', () => {
+  assert.deepEqual(
+    extractTrustIdIdCallbackRequest(
+      { mondayItemId: 'id-check-123' },
+      {
+        ContainerId: 'container-123',
+      },
+    ),
+    {
+      mondayItemId: 'id-check-123',
+      containerId: 'container-123',
+      payload: {
+        ContainerId: 'container-123',
+      },
+    },
+  );
+
+  assert.deepEqual(
+    extractTrustIdIdCallbackRequest(
+      {},
+      {
+        ClientApplicationReference: 'id-check-123',
+        guestId: 'guest-123',
+      },
+    ),
+    {
+      mondayItemId: 'id-check-123',
+      containerId: 'guest-123',
+      payload: {
+        ClientApplicationReference: 'id-check-123',
+        guestId: 'guest-123',
+      },
+    },
   );
 });
 
@@ -245,5 +300,199 @@ test('createTrustIdIdInvite writes TrustID failure details to Monday when item i
     status: TRUST_ID_ID_INVITE_ERROR_STATUS,
     errorDetails: 'TrustID unavailable',
     processingTimestamp: '2026-05-02T10:00:00.000Z',
+  });
+});
+
+test('processTrustIdIdCallback marks passed result when TrustID container is unambiguous', async () => {
+  let retrievedContainerId: string | undefined;
+  let capturedUpdate: MondayTrustIdIdCheckItemUpdates | undefined;
+
+  const result = await processTrustIdIdCallback(
+    {
+      mondayItemId: 'id-check-123',
+      containerId: 'container-from-callback',
+      payload: { EventType: 'ResultNotification' },
+    },
+    callbackConfig,
+    {
+      fetchMondayTrustIdIdCheckItem: async () => ({
+        ...idCheckItem,
+        trustIdContainerId: 'container-from-monday',
+      }),
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayTrustIdIdCheckItem: async (_itemId, updates) => {
+        capturedUpdate = updates;
+        return { change_multiple_column_values: { id: 'id-check-123' } };
+      },
+      retrieveTrustIdDocumentContainer: async (request) => {
+        retrievedContainerId = request.containerId;
+        return {
+          Success: true,
+          Container: {
+            Id: request.containerId,
+            IdentityCheck: {
+              Result: 'Passed',
+              DocumentStatus: 'Verified',
+            },
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(retrievedContainerId, 'container-from-callback');
+  assert.deepEqual(capturedUpdate, {
+    status: TRUST_ID_ID_CHECK_PASSED_STATUS,
+    trustIdContainerId: 'container-from-callback',
+    resultSummary: 'IdentityCheck.Result=Passed; IdentityCheck.DocumentStatus=Verified',
+    errorDetails: null,
+    processingTimestamp: '2026-05-02T10:00:00.000Z',
+  });
+  assert.deepEqual(result, {
+    outcome: 'processed',
+    mondayItemId: 'id-check-123',
+    trustIdContainerId: 'container-from-callback',
+    idStatus: 'passed',
+    status: TRUST_ID_ID_CHECK_PASSED_STATUS,
+    resultSummary: 'IdentityCheck.Result=Passed; IdentityCheck.DocumentStatus=Verified',
+  });
+});
+
+test('processTrustIdIdCallback marks failed result conservatively', async () => {
+  let capturedUpdate: MondayTrustIdIdCheckItemUpdates | undefined;
+
+  const result = await processTrustIdIdCallback(
+    { mondayItemId: 'id-check-123' },
+    callbackConfig,
+    {
+      fetchMondayTrustIdIdCheckItem: async () => ({
+        ...idCheckItem,
+        trustIdContainerId: 'container-from-monday',
+      }),
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayTrustIdIdCheckItem: async (_itemId, updates) => {
+        capturedUpdate = updates;
+        return { change_multiple_column_values: { id: 'id-check-123' } };
+      },
+      retrieveTrustIdDocumentContainer: async (request) => ({
+        Success: true,
+        Container: {
+          Id: request.containerId,
+          Result: 'Failed',
+          DocumentStatus: 'Rejected',
+        },
+      }),
+    },
+  );
+
+  assert.equal(result.idStatus, 'failed');
+  assert.equal(result.status, TRUST_ID_ID_CHECK_FAILED_STATUS);
+  assert.deepEqual(capturedUpdate, {
+    status: TRUST_ID_ID_CHECK_FAILED_STATUS,
+    trustIdContainerId: 'container-from-monday',
+    resultSummary: 'Result=Failed; DocumentStatus=Rejected',
+    errorDetails: null,
+    processingTimestamp: '2026-05-02T10:00:00.000Z',
+  });
+});
+
+test('processTrustIdIdCallback sends ambiguous or unknown results to review', async () => {
+  let capturedUpdate: MondayTrustIdIdCheckItemUpdates | undefined;
+
+  const result = await processTrustIdIdCallback(
+    { mondayItemId: 'id-check-123', containerId: 'container-123' },
+    callbackConfig,
+    {
+      fetchMondayTrustIdIdCheckItem: async () => idCheckItem,
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayTrustIdIdCheckItem: async (_itemId, updates) => {
+        capturedUpdate = updates;
+        return { change_multiple_column_values: { id: 'id-check-123' } };
+      },
+      retrieveTrustIdDocumentContainer: async () => ({
+        Success: true,
+        Container: {
+          IdentityCheck: {
+            Result: 'Passed',
+            Warning: 'Manual review required',
+          },
+        },
+      }),
+    },
+  );
+
+  assert.equal(result.idStatus, 'review');
+  assert.deepEqual(capturedUpdate, {
+    status: TRUST_ID_ID_CHECK_REVIEW_STATUS,
+    trustIdContainerId: 'container-123',
+    resultSummary: 'IdentityCheck.Result=Passed; IdentityCheck.Warning=Manual review required',
+    errorDetails: null,
+    processingTimestamp: '2026-05-02T10:00:00.000Z',
+  });
+});
+
+test('processTrustIdIdCallback rejects missing container ID and updates Monday', async () => {
+  let capturedUpdate: MondayTrustIdIdCheckItemUpdates | undefined;
+
+  await assert.rejects(
+    () =>
+      processTrustIdIdCallback(
+        { mondayItemId: 'id-check-123' },
+        callbackConfig,
+        {
+          fetchMondayTrustIdIdCheckItem: async () => idCheckItem,
+          createTrustIdGuestLink: async () => ({ Success: true }),
+          updateMondayTrustIdIdCheckItem: async (_itemId, updates) => {
+            capturedUpdate = updates;
+            return { change_multiple_column_values: { id: 'id-check-123' } };
+          },
+          retrieveTrustIdDocumentContainer: async () => ({ Success: true }),
+        },
+      ),
+    (error: unknown) => error instanceof TrustIdIdCallbackValidationError && error.message === 'Missing TrustID container ID',
+  );
+
+  assert.deepEqual(capturedUpdate, {
+    status: TRUST_ID_ID_CHECK_ERROR_STATUS,
+    errorDetails: 'Missing TrustID container ID',
+    processingTimestamp: '2026-05-02T10:00:00.000Z',
+  });
+});
+
+test('processTrustIdIdCallback no-ops repeated terminal callback', async () => {
+  let trustIdCalled = false;
+  let mondayUpdated = false;
+
+  const result = await processTrustIdIdCallback(
+    { mondayItemId: 'id-check-123', containerId: 'container-123' },
+    callbackConfig,
+    {
+      fetchMondayTrustIdIdCheckItem: async () => ({
+        ...idCheckItem,
+        status: TRUST_ID_ID_CHECK_PASSED_STATUS,
+        trustIdContainerId: 'container-123',
+        resultSummary: 'IdentityCheck.Result=Passed',
+      }),
+      createTrustIdGuestLink: async () => ({ Success: true }),
+      updateMondayTrustIdIdCheckItem: async () => {
+        mondayUpdated = true;
+        return { change_multiple_column_values: { id: 'id-check-123' } };
+      },
+      retrieveTrustIdDocumentContainer: async () => {
+        trustIdCalled = true;
+        return { Success: true };
+      },
+    },
+  );
+
+  assert.equal(trustIdCalled, false);
+  assert.equal(mondayUpdated, false);
+  assert.deepEqual(result, {
+    outcome: 'already-processed',
+    mondayItemId: 'id-check-123',
+    trustIdContainerId: 'container-123',
+    idStatus: 'passed',
+    status: TRUST_ID_ID_CHECK_PASSED_STATUS,
+    resultSummary: 'IdentityCheck.Result=Passed',
   });
 });

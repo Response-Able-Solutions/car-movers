@@ -95,6 +95,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       mondayItemId: result.mondayItemId,
       trustIdContainerId: result.trustIdContainerId,
       dbsReference: result.dbsReference,
+      outcome: result.outcome,
     });
 
     response.status(200).json({

@@ -47,6 +47,7 @@ Additional iDenfy endpoints:
 http://localhost:3000/api/create-idenfy-session
 http://localhost:3000/api/idenfy-callback
 http://localhost:3000/api/applicant-interview-pdf?itemId=12345
+http://localhost:3000/api/create-trustid-dbs-invite
 ```
 
 The Vite UI will use `VITE_API_BASE_URL` to call that endpoint.
@@ -69,6 +70,13 @@ IDENFY_API_KEY=your_idenfy_api_key
 IDENFY_API_SECRET=your_idenfy_api_secret
 IDENFY_CALLBACK_SIGNING_KEY=your_idenfy_callback_signing_key
 IDENFY_CALLBACK_URL=https://your-api-host/api/idenfy-callback
+TRUSTID_BASE_URL=https://sandbox.trustid.co.uk
+TRUSTID_API_KEY=your_trustid_api_key
+TRUSTID_USERNAME=your_trustid_api_username
+TRUSTID_PASSWORD=your_trustid_api_password
+TRUSTID_DEVICE_ID=your_stable_device_id
+TRUSTID_BRANCH_ID=your_trustid_branch_id
+TRUSTID_CALLBACK_BASE_URL=https://your-api-host
 APPLICANT_INTERVIEW_BOARD_ID=your_applicant_board_id
 APPLICANT_INTERVIEW_FIRST_NAME_COLUMN_ID=text_first_name
 APPLICANT_INTERVIEW_LAST_NAME_COLUMN_ID=text_last_name
@@ -94,12 +102,14 @@ Notes:
 
 - `IDENFY_CALLBACK_URL` is optional. If omitted, the create-session endpoint derives the callback URL from the incoming request host.
 - `INTERNAL_API_KEY` protects `POST /api/create-idenfy-session` and `GET /api/applicant-interview-pdf` via the `x-api-key` header.
+- `POST /api/create-trustid-dbs-invite` is protected by `INTERNAL_API_KEY` and expects `{ "mondayItemId": "12345" }`.
 - The applicant interview PDF endpoint includes the fixed shift-pattern column `dropdown_mm09fzwe` for applicant availability.
 - The applicant interview PDF endpoint has four fixed application-answer mappings checked into code for the current interview questions.
 - The applicant interview PDF endpoint reads from a separate configured monday board and returns a branded `application/pdf` document for one item ID.
 - The callback flow updates monday status column `MONDAY_STATUS_COLUMN_ID` with `ID Verify Success` for final approved outcomes and `ID Verify Review` for final suspected outcomes.
 - The DBS board must store applicant name and applicant email directly because these are required to create a TrustID guest link. The linked driver item column is used for traceability.
 - The DBS board adapter reads and writes TrustID container/guest IDs, invite creation time, DBS reference, error details, status, and processing timestamp through the configured DBS column IDs.
+- `TRUSTID_CALLBACK_BASE_URL` is optional for local testing. If omitted, the TrustID DBS invite endpoint derives the callback base URL from the incoming request host.
 
 ## Shared tests
 

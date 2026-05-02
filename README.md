@@ -77,6 +77,17 @@ APPLICANT_INTERVIEW_EMAIL_COLUMN_ID=email_email
 APPLICANT_INTERVIEW_ROLE_COLUMN_ID=text_role
 APPLICANT_INTERVIEW_STATUS_COLUMN_ID=color_status
 APPLICANT_INTERVIEW_NOTES_COLUMN_ID=long_text_notes
+DBS_BOARD_ID=your_dbs_board_id
+DBS_APPLICANT_NAME_COLUMN_ID=text_applicant_name
+DBS_APPLICANT_EMAIL_COLUMN_ID=email_applicant_email
+DBS_LINKED_DRIVER_ITEM_COLUMN_ID=connect_driver
+DBS_STATUS_COLUMN_ID=color_status
+DBS_TRUSTID_CONTAINER_ID_COLUMN_ID=text_trustid_container
+DBS_TRUSTID_GUEST_ID_COLUMN_ID=text_trustid_guest
+DBS_INVITE_CREATED_AT_COLUMN_ID=date_invite_created
+DBS_REFERENCE_COLUMN_ID=text_dbs_reference
+DBS_ERROR_DETAILS_COLUMN_ID=long_text_error_details
+DBS_PROCESSING_TIMESTAMP_COLUMN_ID=date_processing_timestamp
 ```
 
 Notes:
@@ -87,6 +98,8 @@ Notes:
 - The applicant interview PDF endpoint has four fixed application-answer mappings checked into code for the current interview questions.
 - The applicant interview PDF endpoint reads from a separate configured monday board and returns a branded `application/pdf` document for one item ID.
 - The callback flow updates monday status column `MONDAY_STATUS_COLUMN_ID` with `ID Verify Success` for final approved outcomes and `ID Verify Review` for final suspected outcomes.
+- The DBS board must store applicant name and applicant email directly because these are required to create a TrustID guest link. The linked driver item column is used for traceability.
+- The DBS board adapter reads and writes TrustID container/guest IDs, invite creation time, DBS reference, error details, status, and processing timestamp through the configured DBS column IDs.
 
 ## Shared tests
 

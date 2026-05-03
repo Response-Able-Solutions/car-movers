@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   Trustid,
   TrustidValidationError,
+  type CreateIdInviteRequest,
 } from '@car-movers/shared/lib/workflows/trustid';
 import {
   TrustidApiClient,
@@ -9,9 +10,9 @@ import {
 } from '@car-movers/shared/lib/adapters/trustid';
 import {
   MondayTrustidApiClient,
-  loadMondayTrustidDbsConfigFromEnv,
+  loadMondayTrustidIdCheckConfigFromEnv,
 } from '@car-movers/shared/lib/adapters/monday';
-import { getRequestBaseUrl, hasValidInternalApiKey, readEnv } from './shared/endpoint.js';
+import { hasValidInternalApiKey, readEnv } from './shared/endpoint.js';
 
 function readOptionalNumberEnv(name: string): number | undefined {
   const raw = process.env[name]?.trim();
@@ -23,28 +24,23 @@ function readOptionalNumberEnv(name: string): number | undefined {
 
 const trustidClient = new TrustidApiClient(loadTrustidConfigFromEnv());
 const mondayClient = new MondayTrustidApiClient({
-  dbs: loadMondayTrustidDbsConfigFromEnv(),
+  idCheck: loadMondayTrustidIdCheckConfigFromEnv(),
 });
 const trustid = new Trustid({
   trustidClient,
   mondayClient,
-  dbsInvite: {
-    branchId: readEnv('TRUSTID_BRANCH_ID'),
-    digitalIdentificationScheme: readOptionalNumberEnv('TRUSTID_DBS_DIGITAL_IDENTIFICATION_SCHEME'),
+  idInvite: {
+    branchId: process.env.TRUSTID_ID_BRANCH_ID?.trim() || readEnv('TRUSTID_BRANCH_ID'),
+    digitalIdentificationScheme: readOptionalNumberEnv('TRUSTID_ID_DIGITAL_IDENTIFICATION_SCHEME'),
   },
 });
 
-function readMondayItemId(request: VercelRequest): string {
-  const body = request.body as { mondayItemId?: string } | undefined;
+
+function readRequestBody(request: VercelRequest): CreateIdInviteRequest {
+  const body = request.body as Partial<CreateIdInviteRequest> | undefined;
   const mondayItemId = body?.mondayItemId?.trim();
   if (!mondayItemId) throw new TrustidValidationError('Missing mondayItemId');
-  return mondayItemId;
-}
-
-function callbackBaseUrl(request: VercelRequest): string {
-  const fromEnv = process.env.TRUSTID_CALLBACK_BASE_URL?.trim();
-  if (fromEnv) return fromEnv;
-  return getRequestBaseUrl(request);
+  return { mondayItemId };
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -57,15 +53,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     if (!hasValidInternalApiKey(request)) return void response.status(401).json({ error: 'Unauthorized' });
-    const mondayItemId = readMondayItemId(request);
-    const baseUrl = callbackBaseUrl(request);
+    const body = readRequestBody(request);
 
-    console.log('trustid.dbsInvite.received', {
-      monday_item_id: mondayItemId,
-      callback_base_url: baseUrl,
-    });
-    const result = await trustid.createDbsInvite({ mondayItemId, callbackBaseUrl: baseUrl });
-    console.log('trustid.dbsInvite.success', {
+    console.log('trustid.idInvite.received', { monday_item_id: body.mondayItemId });
+    const result = await trustid.createIdInvite(body);
+    console.log('trustid.idInvite.success', {
       monday_item_id: result.mondayItemId,
       outcome: result.outcome,
       trust_id_container_id: result.outcome === 'created' ? result.trustIdContainerId : null,
@@ -73,9 +65,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     response.status(200).json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create TrustID DBS invite';
+    const message = error instanceof Error ? error.message : 'Failed to create TrustID ID invite';
     const status = error instanceof TrustidValidationError ? 400 : 500;
-    console.error('trustid.dbsInvite.error', { message, status });
+    console.error('trustid.idInvite.error', { message, status });
     response.status(status).json({ error: message });
   }
 }

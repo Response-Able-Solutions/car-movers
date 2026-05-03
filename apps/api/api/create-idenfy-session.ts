@@ -1,56 +1,10 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   createIdenfySession,
   type CreateIdenfySessionRequest,
   type CreateIdenfySessionResponse,
 } from './shared/idenfy.js';
-
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
-}
-
-function getRequestBaseUrl(request: VercelRequest) {
-  const host = request.headers['x-forwarded-host'] ?? request.headers.host;
-  const protocolHeader = request.headers['x-forwarded-proto'];
-  const protocol = Array.isArray(protocolHeader) ? protocolHeader[0] : protocolHeader ?? 'http';
-
-  return `${protocol}://${host}`;
-}
-
-function getExpectedApiKey() {
-  return readEnv('INTERNAL_API_KEY');
-}
-
-function readApiKey(request: VercelRequest) {
-  const rawValue = request.headers['x-api-key'];
-  return Array.isArray(rawValue) ? rawValue[0] ?? null : rawValue ?? null;
-}
-
-function hasValidApiKey(request: VercelRequest) {
-  const providedApiKey = readApiKey(request);
-
-  if (!providedApiKey) {
-    return false;
-  }
-
-  const expectedApiKey = getExpectedApiKey();
-  const providedBuffer = Buffer.from(providedApiKey);
-  const expectedBuffer = Buffer.from(expectedApiKey);
-
-  if (providedBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(providedBuffer, expectedBuffer);
-}
+import { getRequestBaseUrl, hasValidInternalApiKey, readApiKey, readEnv } from './shared/endpoint.js';
 
 function getCallbackUrl(request: VercelRequest) {
   const configuredUrl = process.env.IDENFY_CALLBACK_URL?.trim();
@@ -94,7 +48,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     return;
   }
 
-  if (!hasValidApiKey(request)) {
+  if (!hasValidInternalApiKey(request)) {
     response.status(401).json({ error: 'Unauthorized' });
     return;
   }

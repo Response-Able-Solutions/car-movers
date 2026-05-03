@@ -2,8 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   Trustid,
   TrustidValidationError,
-  type BasicDbsCheckConfig,
-  type ProcessDbsCallbackRequest,
+  type ProcessIdCallbackRequest,
 } from '@car-movers/shared/lib/workflows/trustid';
 import {
   TrustidApiClient,
@@ -11,33 +10,16 @@ import {
 } from '@car-movers/shared/lib/adapters/trustid';
 import {
   MondayTrustidApiClient,
-  loadMondayTrustidDbsConfigFromEnv,
+  loadMondayTrustidIdCheckConfigFromEnv,
 } from '@car-movers/shared/lib/adapters/monday';
-import { readEnv } from './shared/endpoint.js';
-
-function readPurposeOfCheck(): BasicDbsCheckConfig['purposeOfCheck'] {
-  const value = process.env.TRUSTID_DBS_PURPOSE_OF_CHECK?.trim();
-  if (value === 'Personal Interest' || value === 'Employment' || value === 'Other') return value;
-  return undefined;
-}
 
 const trustidClient = new TrustidApiClient(loadTrustidConfigFromEnv());
 const mondayClient = new MondayTrustidApiClient({
-  dbs: loadMondayTrustidDbsConfigFromEnv(),
+  idCheck: loadMondayTrustidIdCheckConfigFromEnv(),
 });
-const trustid = new Trustid({
-  trustidClient,
-  mondayClient,
-  basicCheck: {
-    employerName: process.env.TRUSTID_DBS_EMPLOYER_NAME?.trim(),
-    evidenceCheckedBy: readEnv('TRUSTID_DBS_EVIDENCE_CHECKED_BY'),
-    employmentSector: readEnv('TRUSTID_DBS_EMPLOYMENT_SECTOR'),
-    purposeOfCheck: readPurposeOfCheck(),
-    other: process.env.TRUSTID_DBS_OTHER?.trim(),
-  },
-});
+const trustid = new Trustid({ trustidClient, mondayClient });
 
-function readCallbackRequest(request: VercelRequest): ProcessDbsCallbackRequest {
+function readCallbackRequest(request: VercelRequest): ProcessIdCallbackRequest {
   const queryItemId = Array.isArray(request.query.mondayItemId)
     ? request.query.mondayItemId[0]
     : request.query.mondayItemId;
@@ -74,23 +56,23 @@ export default async function handler(request: VercelRequest, response: VercelRe
   try {
     const callbackRequest = readCallbackRequest(request);
 
-    console.log('trustid.dbsCallback.received', {
+    console.log('trustid.idCallback.received', {
       monday_item_id: callbackRequest.mondayItemId,
       container_id: callbackRequest.containerId ?? null,
     });
-    const result = await trustid.processDbsCallback(callbackRequest);
-    console.log('trustid.dbsCallback.success', {
+    const result = await trustid.processIdCallback(callbackRequest);
+    console.log('trustid.idCallback.success', {
       monday_item_id: result.mondayItemId,
       outcome: result.outcome,
+      id_status: result.idStatus,
       trust_id_container_id: result.trustIdContainerId,
-      dbs_reference: result.outcome === 'submitted' ? result.dbsReference : null,
     });
 
     response.status(200).json({ received: true, processed: true, ...result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'TrustID DBS callback handling failed';
+    const message = error instanceof Error ? error.message : 'TrustID ID callback handling failed';
     const status = error instanceof TrustidValidationError ? 400 : 500;
-    console.error('trustid.dbsCallback.error', { message, status });
+    console.error('trustid.idCallback.error', { message, status });
     response.status(status).json({ error: message });
   }
 }

@@ -1,39 +1,5 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
-}
-
-function readApiKey(request: VercelRequest) {
-  const rawValue = request.headers['x-api-key'];
-  return Array.isArray(rawValue) ? rawValue[0] ?? null : rawValue ?? null;
-}
-
-function hasValidApiKey(request: VercelRequest) {
-  const providedApiKey = readApiKey(request);
-
-  if (!providedApiKey) {
-    return false;
-  }
-
-  const expectedApiKey = readEnv('INTERNAL_API_KEY');
-  const providedBuffer = Buffer.from(providedApiKey);
-  const expectedBuffer = Buffer.from(expectedApiKey);
-
-  if (providedBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(providedBuffer, expectedBuffer);
-}
+import { hasValidInternalApiKey } from './shared/endpoint.js';
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   response.setHeader('Access-Control-Allow-Origin', '*');
@@ -51,7 +17,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    if (!hasValidApiKey(request)) {
+    if (!hasValidInternalApiKey(request)) {
       response.status(401).json({ error: 'Unauthorized' });
       return;
     }

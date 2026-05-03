@@ -7,22 +7,13 @@ import {
   verifyIdenfySignature,
 } from './shared/idenfy.js';
 import { updateMondayStatus } from './shared/monday.js';
+import { readEnv } from './shared/endpoint.js';
 
 export const config = {
   api: {
     bodyParser: false,
   },
 };
-
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
-}
 
 function readSignature(request: VercelRequest) {
   const value = request.headers['idenfy-signature'];

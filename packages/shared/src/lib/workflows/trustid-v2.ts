@@ -1,6 +1,10 @@
 import type { TrustidClient } from '../adapters/trustid-v2.ts';
 import { TrustidApiError } from '../adapters/trustid-v2.ts';
-import type { MondayTrustidClient, IdCheckItem } from '../adapters/monday-trustid-v2.ts';
+import type {
+  MondayTrustidClient,
+  IdCheckItem,
+  DbsCheckItem,
+} from '../adapters/monday-trustid-v2.ts';
 import type { StatusValues } from '../monday-boards.ts';
 
 export class TrustidValidationError extends Error {
@@ -28,11 +32,31 @@ export type CreateIdInviteResult =
       currentStatus: string;
     };
 
+export type CreateDbsInviteRequest = {
+  mondayItemId: string;
+};
+
+export type CreateDbsInviteResult =
+  | {
+      outcome: 'created';
+      mondayItemId: string;
+      trustIdContainerId: string | null;
+      guestLinkUrl: string | null;
+      inviteSentAt: string;
+    }
+  | {
+      outcome: 'already-processed';
+      mondayItemId: string;
+      currentStatus: string;
+    };
+
 export type TrustidWorkflowConfig = {
   trustidClient: TrustidClient;
   mondayClient: MondayTrustidClient;
   idCallbackUrl: string;
   idCheckStatusValues: StatusValues;
+  dbsCallbackUrl: string;
+  dbsCheckStatusValues: StatusValues;
   now?: () => Date;
 };
 
@@ -41,6 +65,8 @@ export class Trustid {
   private mondayClient: MondayTrustidClient;
   private idCallbackUrl: string;
   private idCheckStatusValues: StatusValues;
+  private dbsCallbackUrl: string;
+  private dbsCheckStatusValues: StatusValues;
   private now: () => Date;
 
   constructor(config: TrustidWorkflowConfig) {
@@ -48,6 +74,8 @@ export class Trustid {
     this.mondayClient = config.mondayClient;
     this.idCallbackUrl = config.idCallbackUrl;
     this.idCheckStatusValues = config.idCheckStatusValues;
+    this.dbsCallbackUrl = config.dbsCallbackUrl;
+    this.dbsCheckStatusValues = config.dbsCheckStatusValues;
     this.now = config.now ?? (() => new Date());
   }
 
@@ -107,6 +135,65 @@ export class Trustid {
     const status = item.status;
     if (status === null) return null;
     if (status === this.idCheckStatusValues.sendInvite) return null;
+    return status;
+  }
+
+  async createDbsInvite(request: CreateDbsInviteRequest): Promise<CreateDbsInviteResult> {
+    const mondayItemId = request.mondayItemId?.trim();
+    if (!mondayItemId) throw new TrustidValidationError('Missing mondayItemId');
+
+    const item = await this.mondayClient.fetchDbsItem(mondayItemId);
+    const skipReason = this.dbsInviteSkipReason(item);
+    if (skipReason) {
+      return {
+        outcome: 'already-processed',
+        mondayItemId: item.itemId,
+        currentStatus: skipReason,
+      };
+    }
+
+    const inviteSentAt = this.now().toISOString();
+    let guestLink;
+    try {
+      guestLink = await this.trustidClient.createGuestLink({
+        email: item.applicantEmail,
+        name: item.applicantName,
+        clientApplicationReference: item.itemId,
+        containerEventCallbackUrl: this.dbsCallbackUrl,
+      });
+    } catch (error) {
+      const message = errorMessage(error);
+      await this.mondayClient.markDbsError(item.itemId, {
+        status: this.dbsCheckStatusValues.error,
+        error: message,
+        lastUpdatedAt: inviteSentAt,
+      });
+      throw error;
+    }
+
+    const trustIdContainerId = guestLink.ContainerId ?? null;
+    const guestLinkUrl = guestLink.LinkUrl ?? null;
+
+    await this.mondayClient.markDbsInviteSent(item.itemId, {
+      status: this.dbsCheckStatusValues.inviteSent,
+      trustIdContainerId,
+      guestLinkUrl,
+      lastUpdatedAt: inviteSentAt,
+    });
+
+    return {
+      outcome: 'created',
+      mondayItemId: item.itemId,
+      trustIdContainerId,
+      guestLinkUrl,
+      inviteSentAt,
+    };
+  }
+
+  private dbsInviteSkipReason(item: DbsCheckItem): string | null {
+    const status = item.status;
+    if (status === null) return null;
+    if (status === this.dbsCheckStatusValues.sendInvite) return null;
     return status;
   }
 }

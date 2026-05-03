@@ -23,6 +23,9 @@ export {
   type IdCheckItem,
   type IdCheckInviteSentUpdates,
   type IdCheckErrorUpdates,
+  type DbsCheckItem,
+  type DbsCheckInviteSentUpdates,
+  type DbsCheckErrorUpdates,
 } from './lib/adapters/monday-trustid-v2.ts';
 
 export {
@@ -30,6 +33,8 @@ export {
   TrustidValidationError,
   type CreateIdInviteRequest,
   type CreateIdInviteResult,
+  type CreateDbsInviteRequest,
+  type CreateDbsInviteResult,
   type TrustidWorkflowConfig,
 } from './lib/workflows/trustid-v2.ts';
 

@@ -27,6 +27,12 @@ export type IdCheckErrorUpdates = {
   lastUpdatedAt: string;
 };
 
+export type IdCheckResultUpdates = {
+  status: string;
+  summary: string;
+  lastUpdatedAt: string;
+};
+
 export type DbsCheckItem = {
   itemId: string;
   applicantName: string;
@@ -62,6 +68,7 @@ export interface MondayTrustidClient {
   fetchIdCheckItem(itemId: string): Promise<IdCheckItem>;
   markIdInviteSent(itemId: string, updates: IdCheckInviteSentUpdates): Promise<void>;
   markIdError(itemId: string, updates: IdCheckErrorUpdates): Promise<void>;
+  markIdResult(itemId: string, updates: IdCheckResultUpdates): Promise<void>;
   fetchDbsItem(itemId: string): Promise<DbsCheckItem>;
   markDbsInviteSent(itemId: string, updates: DbsCheckInviteSentUpdates): Promise<void>;
   markDbsError(itemId: string, updates: DbsCheckErrorUpdates): Promise<void>;
@@ -166,6 +173,15 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
     await this.changeMultipleColumnValues(itemId, board.boardId, {
       [board.columns.status]: updates.status,
       [board.columns.error]: updates.error,
+      [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+    });
+  }
+
+  async markIdResult(itemId: string, updates: IdCheckResultUpdates): Promise<void> {
+    const board = this.requireIdCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: updates.status,
+      [board.columns.summary]: updates.summary,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
   }

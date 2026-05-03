@@ -129,6 +129,17 @@ type MondayChangeMultipleColumnValuesResponse = {
   change_multiple_column_values?: { id: string };
 };
 
+// Monday Status columns are enums. When writing via change_multiple_column_values,
+// the value must be a JSON object {label: "..."} matching one of the column's
+// defined labels — a plain string is rejected (silently no-ops).
+// (change_simple_column_value accepts a plain string, but we use the multi-column
+// mutation to write status + other fields atomically.)
+type MondayColumnWriteValue = string | null | { label: string };
+
+function statusValue(label: string): { label: string } {
+  return { label };
+}
+
 export class MondayTrustidApiClient implements MondayTrustidClient {
   private config: MondayTrustidV2Config;
 
@@ -172,7 +183,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markIdInviteSent(itemId: string, updates: IdCheckInviteSentUpdates): Promise<void> {
     const board = this.requireIdCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.trustIdContainerId]: updates.trustIdContainerId,
       [board.columns.guestLinkUrl]: updates.guestLinkUrl,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
@@ -184,7 +195,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markIdError(itemId: string, updates: IdCheckErrorUpdates): Promise<void> {
     const board = this.requireIdCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.error]: updates.error,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
@@ -193,7 +204,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markIdResult(itemId: string, updates: IdCheckResultUpdates): Promise<void> {
     const board = this.requireIdCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.summary]: updates.summary,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
@@ -235,7 +246,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markDbsInviteSent(itemId: string, updates: DbsCheckInviteSentUpdates): Promise<void> {
     const board = this.requireDbsCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.trustIdContainerId]: updates.trustIdContainerId,
       [board.columns.guestLinkUrl]: updates.guestLinkUrl,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
@@ -246,7 +257,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markDbsError(itemId: string, updates: DbsCheckErrorUpdates): Promise<void> {
     const board = this.requireDbsCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.error]: updates.error,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
@@ -255,7 +266,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markDbsSubmitted(itemId: string, updates: DbsCheckSubmittedUpdates): Promise<void> {
     const board = this.requireDbsCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
   }
@@ -263,7 +274,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   async markDbsResult(itemId: string, updates: DbsCheckResultUpdates): Promise<void> {
     const board = this.requireDbsCheckBoard();
     await this.changeMultipleColumnValues(itemId, board.boardId, {
-      [board.columns.status]: updates.status,
+      [board.columns.status]: statusValue(updates.status),
       [board.columns.summary]: updates.summary,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
@@ -314,7 +325,7 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
   private async changeMultipleColumnValues(
     itemId: string,
     boardId: string,
-    columnValues: Record<string, string | null>,
+    columnValues: Record<string, MondayColumnWriteValue>,
   ): Promise<void> {
     await this.mondayRequest<MondayChangeMultipleColumnValuesResponse>(
       `

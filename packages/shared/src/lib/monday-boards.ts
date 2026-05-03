@@ -46,6 +46,13 @@ export type StatusValues = {
   error: string;
 };
 
+export type DbsStatusValues = StatusValues & {
+  // Intermediate state set after we call initiateBasicDbsCheck on the
+  // first ResultNotification webhook. The cert outcome arrives on a
+  // second webhook; status moves from dbsSubmitted to a terminal value.
+  dbsSubmitted: string;
+};
+
 export type IdCheckBoardConfig = {
   boardId: string;
   columns: IdCheckColumns;
@@ -55,7 +62,7 @@ export type IdCheckBoardConfig = {
 export type DbsCheckBoardConfig = {
   boardId: string;
   columns: DbsCheckColumns;
-  statusValues: StatusValues;
+  statusValues: DbsStatusValues;
 };
 
 // TODO(slice 2 follow-up): replace every TODO_REPLACE_WHEN_BOARD_EXISTS once
@@ -80,7 +87,7 @@ export const idCheckBoard: IdCheckBoardConfig = {
     refer: 'Refer',
     fail: 'Fail',
     error: 'Error',
-  },
+  } satisfies StatusValues,
 };
 
 // TODO(slice 2 follow-up): replace every TODO_REPLACE_WHEN_BOARD_EXISTS once
@@ -101,9 +108,10 @@ export const dbsCheckBoard: DbsCheckBoardConfig = {
   statusValues: {
     sendInvite: 'Send invite',
     inviteSent: 'Invite sent',
+    dbsSubmitted: 'DBS submitted',
     pass: 'Pass',
     refer: 'Refer',
     fail: 'Fail',
     error: 'Error',
-  },
+  } satisfies DbsStatusValues,
 };

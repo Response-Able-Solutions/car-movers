@@ -58,6 +58,17 @@ export type DbsCheckErrorUpdates = {
   lastUpdatedAt: string;
 };
 
+export type DbsCheckSubmittedUpdates = {
+  status: string;
+  lastUpdatedAt: string;
+};
+
+export type DbsCheckResultUpdates = {
+  status: string;
+  summary: string;
+  lastUpdatedAt: string;
+};
+
 export type MondayTrustidV2Config = {
   token: string;
   idCheckBoard?: IdCheckBoardConfig;
@@ -72,6 +83,8 @@ export interface MondayTrustidClient {
   fetchDbsItem(itemId: string): Promise<DbsCheckItem>;
   markDbsInviteSent(itemId: string, updates: DbsCheckInviteSentUpdates): Promise<void>;
   markDbsError(itemId: string, updates: DbsCheckErrorUpdates): Promise<void>;
+  markDbsSubmitted(itemId: string, updates: DbsCheckSubmittedUpdates): Promise<void>;
+  markDbsResult(itemId: string, updates: DbsCheckResultUpdates): Promise<void>;
 }
 
 export class MondayTrustidItemNotFoundError extends Error {
@@ -235,6 +248,23 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
     await this.changeMultipleColumnValues(itemId, board.boardId, {
       [board.columns.status]: updates.status,
       [board.columns.error]: updates.error,
+      [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+    });
+  }
+
+  async markDbsSubmitted(itemId: string, updates: DbsCheckSubmittedUpdates): Promise<void> {
+    const board = this.requireDbsCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: updates.status,
+      [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+    });
+  }
+
+  async markDbsResult(itemId: string, updates: DbsCheckResultUpdates): Promise<void> {
+    const board = this.requireDbsCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: updates.status,
+      [board.columns.summary]: updates.summary,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
     });
   }

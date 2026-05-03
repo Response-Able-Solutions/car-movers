@@ -3,6 +3,7 @@ import { build } from 'esbuild';
 await build({
   entryPoints: [
     'src/trustid.ts',
+    'src/trustid-v2.ts',
     'src/verification.ts',
     'src/idenfy.ts',
     'src/monday.ts',

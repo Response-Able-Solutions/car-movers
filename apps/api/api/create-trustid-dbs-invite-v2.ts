@@ -9,7 +9,7 @@ import {
   loadMondayTrustidV2ConfigFromEnv,
   idCheckBoard,
   dbsCheckBoard,
-  type CreateIdInviteRequest,
+  type CreateDbsInviteRequest,
 } from '@car-movers/shared/trustid-v2';
 import { hasValidInternalApiKey, readEnv } from './shared/endpoint.js';
 
@@ -26,8 +26,8 @@ const trustid = new Trustid({
   dbsCheckStatusValues: dbsCheckBoard.statusValues,
 });
 
-function readRequestBody(request: VercelRequest): CreateIdInviteRequest {
-  const body = request.body as Partial<CreateIdInviteRequest> | undefined;
+function readRequestBody(request: VercelRequest): CreateDbsInviteRequest {
+  const body = request.body as Partial<CreateDbsInviteRequest> | undefined;
   const mondayItemId = body?.mondayItemId?.trim();
   if (!mondayItemId) throw new TrustidValidationError('Missing mondayItemId');
   return { mondayItemId };
@@ -45,9 +45,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
     if (!hasValidInternalApiKey(request)) return void response.status(401).json({ error: 'Unauthorized' });
     const body = readRequestBody(request);
 
-    console.log('trustid.idInviteV2.received', { monday_item_id: body.mondayItemId });
-    const result = await trustid.createIdInvite(body);
-    console.log('trustid.idInviteV2.success', {
+    console.log('trustid.dbsInviteV2.received', { monday_item_id: body.mondayItemId });
+    const result = await trustid.createDbsInvite(body);
+    console.log('trustid.dbsInviteV2.success', {
       monday_item_id: result.mondayItemId,
       outcome: result.outcome,
       trust_id_container_id: result.outcome === 'created' ? result.trustIdContainerId : null,
@@ -55,11 +55,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     response.status(200).json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create TrustID ID invite';
+    const message = error instanceof Error ? error.message : 'Failed to create TrustID DBS invite';
     let status = 500;
     if (error instanceof TrustidValidationError) status = 400;
     else if (error instanceof TrustidApiError) status = 502;
-    console.error('trustid.idInviteV2.error', { message, status });
+    console.error('trustid.dbsInviteV2.error', { message, status });
     response.status(status).json({ error: message });
   }
 }

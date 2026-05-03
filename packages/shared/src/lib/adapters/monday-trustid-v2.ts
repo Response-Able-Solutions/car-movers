@@ -27,6 +27,37 @@ export type IdCheckErrorUpdates = {
   lastUpdatedAt: string;
 };
 
+export type IdCheckResultUpdates = {
+  status: string;
+  summary: string;
+  lastUpdatedAt: string;
+};
+
+export type DbsCheckItem = {
+  itemId: string;
+  applicantName: string;
+  applicantEmail: string;
+  status: string | null;
+  guestLinkUrl: string | null;
+  trustIdContainerId: string | null;
+  lastUpdatedAt: string | null;
+  summary: string | null;
+  error: string | null;
+};
+
+export type DbsCheckInviteSentUpdates = {
+  status: string;
+  trustIdContainerId: string | null;
+  guestLinkUrl: string | null;
+  lastUpdatedAt: string;
+};
+
+export type DbsCheckErrorUpdates = {
+  status: string;
+  error: string;
+  lastUpdatedAt: string;
+};
+
 export type MondayTrustidV2Config = {
   token: string;
   idCheckBoard?: IdCheckBoardConfig;
@@ -37,6 +68,10 @@ export interface MondayTrustidClient {
   fetchIdCheckItem(itemId: string): Promise<IdCheckItem>;
   markIdInviteSent(itemId: string, updates: IdCheckInviteSentUpdates): Promise<void>;
   markIdError(itemId: string, updates: IdCheckErrorUpdates): Promise<void>;
+  markIdResult(itemId: string, updates: IdCheckResultUpdates): Promise<void>;
+  fetchDbsItem(itemId: string): Promise<DbsCheckItem>;
+  markDbsInviteSent(itemId: string, updates: DbsCheckInviteSentUpdates): Promise<void>;
+  markDbsError(itemId: string, updates: DbsCheckErrorUpdates): Promise<void>;
 }
 
 export class MondayTrustidItemNotFoundError extends Error {
@@ -142,11 +177,80 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
     });
   }
 
+  async markIdResult(itemId: string, updates: IdCheckResultUpdates): Promise<void> {
+    const board = this.requireIdCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: updates.status,
+      [board.columns.summary]: updates.summary,
+      [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+    });
+  }
+
+  async fetchDbsItem(itemId: string): Promise<DbsCheckItem> {
+    const board = this.requireDbsCheckBoard();
+    const columnIds = [
+      board.columns.applicantName,
+      board.columns.applicantEmail,
+      board.columns.status,
+      board.columns.guestLinkUrl,
+      board.columns.trustIdContainerId,
+      board.columns.lastUpdatedAt,
+      board.columns.summary,
+      board.columns.error,
+    ];
+    const item = await this.fetchItem(itemId, board.boardId, columnIds);
+    if (!item) throw new MondayTrustidItemNotFoundError(itemId, board.boardId);
+
+    const applicantName = readColumnText(item, board.columns.applicantName);
+    const applicantEmail = readColumnText(item, board.columns.applicantEmail);
+    if (!applicantName) throw new MondayTrustidItemMissingFieldError(item.id, 'applicant name');
+    if (!applicantEmail) throw new MondayTrustidItemMissingFieldError(item.id, 'applicant email');
+
+    return {
+      itemId: item.id,
+      applicantName,
+      applicantEmail,
+      status: readColumnText(item, board.columns.status),
+      guestLinkUrl: readColumnText(item, board.columns.guestLinkUrl),
+      trustIdContainerId: readColumnText(item, board.columns.trustIdContainerId),
+      lastUpdatedAt: readColumnText(item, board.columns.lastUpdatedAt),
+      summary: readColumnText(item, board.columns.summary),
+      error: readColumnText(item, board.columns.error),
+    };
+  }
+
+  async markDbsInviteSent(itemId: string, updates: DbsCheckInviteSentUpdates): Promise<void> {
+    const board = this.requireDbsCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: updates.status,
+      [board.columns.trustIdContainerId]: updates.trustIdContainerId,
+      [board.columns.guestLinkUrl]: updates.guestLinkUrl,
+      [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+      [board.columns.error]: null,
+    });
+  }
+
+  async markDbsError(itemId: string, updates: DbsCheckErrorUpdates): Promise<void> {
+    const board = this.requireDbsCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: updates.status,
+      [board.columns.error]: updates.error,
+      [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+    });
+  }
+
   private requireIdCheckBoard(): IdCheckBoardConfig {
     if (!this.config.idCheckBoard) {
       throw new Error('MondayTrustidApiClient: idCheckBoard config not provided');
     }
     return this.config.idCheckBoard;
+  }
+
+  private requireDbsCheckBoard(): DbsCheckBoardConfig {
+    if (!this.config.dbsCheckBoard) {
+      throw new Error('MondayTrustidApiClient: dbsCheckBoard config not provided');
+    }
+    return this.config.dbsCheckBoard;
   }
 
   private async fetchItem(

@@ -123,13 +123,16 @@ export class Trustid {
     }
 
     const inviteSentAt = this.now().toISOString();
+    // Encode mondayItemId in the callback URL so the webhook handler can route
+    // back even if TrustID's WorkflowStorage payload omits ClientApplicationReference.
+    const callbackUrl = `${this.idCallbackUrl}${this.idCallbackUrl.includes('?') ? '&' : '?'}mondayItemId=${encodeURIComponent(item.itemId)}`;
     let guestLink;
     try {
       guestLink = await this.trustidClient.createGuestLink({
         email: item.applicantEmail,
         name: item.applicantName,
         clientApplicationReference: item.itemId,
-        containerEventCallbackUrl: this.idCallbackUrl,
+        containerEventCallbackUrl: callbackUrl,
       });
     } catch (error) {
       const message = errorMessage(error);

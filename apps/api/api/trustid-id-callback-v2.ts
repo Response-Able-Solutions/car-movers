@@ -30,29 +30,35 @@ const trustid = new Trustid({
 function readCallbackRequest(request: VercelRequest): ProcessIdCallbackRequest {
   const body = (request.body ?? {}) as Record<string, unknown>;
 
-  const mondayItemId =
-    pickString(body.ClientApplicationReference) ??
-    pickString(body.clientApplicationReference);
-  if (!mondayItemId?.trim()) {
-    throw new TrustidValidationError('Missing ClientApplicationReference');
+  // TrustID's ResultNotification webhook nests routing fields inside
+  // body.Callback.WorkflowStorage as { Key, Value } pairs. Build a flat
+  // map of those pairs so we can read ContainerId / ClientApplicationReference.
+  const callback = body.Callback as Record<string, unknown> | undefined;
+  const workflowStorage = (callback?.WorkflowStorage ?? []) as Array<{ Key?: unknown; Value?: unknown }>;
+  const storage: Record<string, string> = {};
+  for (const entry of workflowStorage) {
+    const key = typeof entry.Key === 'string' ? entry.Key : null;
+    const value = typeof entry.Value === 'string' ? entry.Value : null;
+    if (key && value) storage[key] = value;
   }
 
-  const containerId =
-    pickString(body.ContainerId) ??
-    pickString(body.containerId) ??
-    pickString(body.GuestId) ??
-    pickString(body.guestId) ??
-    null;
+  // Routing: prefer the URL query string (we encode mondayItemId at invite
+  // time as belt-and-braces), fall back to the WorkflowStorage payload.
+  const queryItemId = Array.isArray(request.query.mondayItemId)
+    ? request.query.mondayItemId[0]
+    : request.query.mondayItemId;
+  const mondayItemId = (queryItemId ?? storage.ClientApplicationReference)?.trim();
+  if (!mondayItemId) {
+    throw new TrustidValidationError('Missing mondayItemId (no query string or ClientApplicationReference)');
+  }
+
+  const containerId = (storage.ContainerId ?? storage.GuestId)?.trim() || null;
 
   return {
-    mondayItemId: mondayItemId.trim(),
-    containerId: containerId?.trim() || null,
+    mondayItemId,
+    containerId,
     rawPayload: body,
   };
-}
-
-function pickString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {

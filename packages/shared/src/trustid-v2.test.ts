@@ -168,7 +168,7 @@ test('createIdInvite: status sendInvite mints, updates Monday, returns created',
     email: item.applicantEmail,
     name: item.applicantName,
     clientApplicationReference: item.itemId,
-    containerEventCallbackUrl: idCallbackUrl,
+    containerEventCallbackUrl: `${idCallbackUrl}?mondayItemId=${encodeURIComponent(item.itemId)}`,
   });
 
   assert.equal(calls.idInviteSent.length, 1);

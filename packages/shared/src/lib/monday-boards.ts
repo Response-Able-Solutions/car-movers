@@ -1,14 +1,6 @@
 // Monday board structural metadata for the TrustID v2 integration (PRD #38).
 // Single source of truth for board IDs, column IDs, and status column values.
 // Same boards are used in sandbox and production — not env-driven.
-//
-// Placeholder sentinels: every field set to TODO_REPLACE_WHEN_BOARD_EXISTS
-// must be replaced once ops creates the actual Monday boards. Search the repo
-// for the sentinel string to find every spot that needs filling in. Any code
-// path using a placeholder will hit Monday with an obviously-wrong ID and
-// fail loudly — fail-fast.
-
-const TODO = 'TODO_REPLACE_WHEN_BOARD_EXISTS';
 
 export type IdCheckColumns = {
   applicantName: string;
@@ -19,9 +11,6 @@ export type IdCheckColumns = {
   lastUpdatedAt: string;
   summary: string;
   error: string;
-  // Connect-boards column linking back to the main applicant board item.
-  // Auto-populated by Monday on status change; we never read or write it,
-  // it's tracked here so the column isn't lost if the board is rebuilt.
   mainBoardLink: string;
 };
 
@@ -65,20 +54,18 @@ export type DbsCheckBoardConfig = {
   statusValues: DbsStatusValues;
 };
 
-// TODO(slice 2 follow-up): replace every TODO_REPLACE_WHEN_BOARD_EXISTS once
-// the ID-check Monday board exists. Keep the same board across sandbox + prod.
 export const idCheckBoard: IdCheckBoardConfig = {
-  boardId: TODO,
+  boardId: "5095733359",
   columns: {
-    applicantName: TODO,
-    applicantEmail: TODO,
-    status: TODO,
-    guestLinkUrl: TODO,
-    trustIdContainerId: TODO,
-    lastUpdatedAt: TODO,
-    summary: TODO,
-    error: TODO,
-    mainBoardLink: TODO,
+    applicantName: "text_mm30fgks",
+    applicantEmail: "email_mm30an2q",
+    status: "status",
+    guestLinkUrl: "link_mm30bhp2",
+    trustIdContainerId: "text_mm30jcnv",
+    lastUpdatedAt: "text_mm30npkd",
+    summary: "long_text_mm30vz7s",
+    error: "long_text_mm30nw1f",
+    mainBoardLink: "text_mm30t5tk",
   },
   statusValues: {
     sendInvite: 'Send invite',
@@ -90,20 +77,18 @@ export const idCheckBoard: IdCheckBoardConfig = {
   } satisfies StatusValues,
 };
 
-// TODO(slice 2 follow-up): replace every TODO_REPLACE_WHEN_BOARD_EXISTS once
-// the DBS-check Monday board exists. Keep the same board across sandbox + prod.
 export const dbsCheckBoard: DbsCheckBoardConfig = {
-  boardId: TODO,
+  boardId: "5095744655",
   columns: {
-    applicantName: TODO,
-    applicantEmail: TODO,
-    status: TODO,
-    guestLinkUrl: TODO,
-    trustIdContainerId: TODO,
-    lastUpdatedAt: TODO,
-    summary: TODO,
-    error: TODO,
-    mainBoardLink: TODO,
+    applicantName: "text_mm30fgks",
+    applicantEmail: "email_mm30an2q",
+    status: "status",
+    guestLinkUrl: "link_mm30bhp2",
+    trustIdContainerId: "text_mm30jcnv",
+    lastUpdatedAt: "text_mm30npkd",
+    summary: "long_text_mm30vz7s",
+    error: "long_text_mm30nw1f",
+    mainBoardLink: "text_mm30t5tk",
   },
   statusValues: {
     sendInvite: 'Send invite',

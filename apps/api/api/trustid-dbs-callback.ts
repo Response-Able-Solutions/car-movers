@@ -2,17 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   Trustid,
   TrustidValidationError,
+  TrustidApiClient,
+  MondayTrustidApiClient,
+  loadTrustidConfigFromEnv,
+  loadMondayTrustidDbsConfigFromEnv,
   type BasicDbsCheckConfig,
   type ProcessDbsCallbackRequest,
-} from '@car-movers/shared/lib/workflows/trustid';
-import {
-  TrustidApiClient,
-  loadTrustidConfigFromEnv,
-} from '@car-movers/shared/lib/adapters/trustid';
-import {
-  MondayTrustidApiClient,
-  loadMondayTrustidDbsConfigFromEnv,
-} from '@car-movers/shared/lib/adapters/monday';
+} from '@car-movers/shared/trustid';
 import { readEnv } from './shared/endpoint.js';
 
 function readPurposeOfCheck(): BasicDbsCheckConfig['purposeOfCheck'] {

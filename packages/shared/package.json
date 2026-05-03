@@ -10,6 +10,7 @@
     "./verification": "./src/verification.ts",
     "./idenfy": "./src/idenfy.ts",
     "./monday": "./src/monday.ts",
+    "./trustid": "./src/trustid.ts",
     "./lib/adapters/idenfy": "./src/lib/adapters/idenfy.ts",
     "./lib/adapters/monday": "./src/lib/adapters/monday.ts",
     "./lib/adapters/trustid": "./src/lib/adapters/trustid.ts",

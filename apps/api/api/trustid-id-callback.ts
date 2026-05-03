@@ -2,16 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   Trustid,
   TrustidValidationError,
-  type ProcessIdCallbackRequest,
-} from '@car-movers/shared/lib/workflows/trustid';
-import {
   TrustidApiClient,
-  loadTrustidConfigFromEnv,
-} from '@car-movers/shared/lib/adapters/trustid';
-import {
   MondayTrustidApiClient,
+  loadTrustidConfigFromEnv,
   loadMondayTrustidIdCheckConfigFromEnv,
-} from '@car-movers/shared/lib/adapters/monday';
+  type ProcessIdCallbackRequest,
+} from '@car-movers/shared/trustid';
 
 const trustidClient = new TrustidApiClient(loadTrustidConfigFromEnv());
 const mondayClient = new MondayTrustidApiClient({

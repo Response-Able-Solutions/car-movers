@@ -2,16 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   Trustid,
   TrustidValidationError,
-  type CreateIdInviteRequest,
-} from '@car-movers/shared/lib/workflows/trustid';
-import {
   TrustidApiClient,
-  loadTrustidConfigFromEnv,
-} from '@car-movers/shared/lib/adapters/trustid';
-import {
   MondayTrustidApiClient,
+  loadTrustidConfigFromEnv,
   loadMondayTrustidIdCheckConfigFromEnv,
-} from '@car-movers/shared/lib/adapters/monday';
+  type CreateIdInviteRequest,
+} from '@car-movers/shared/trustid';
 import { hasValidInternalApiKey, readEnv } from './shared/endpoint.js';
 
 function readOptionalNumberEnv(name: string): number | undefined {

@@ -25,6 +25,7 @@ import type {
   IdCheckErrorUpdates,
   IdCheckInviteSentUpdates,
   IdCheckItem,
+  IdCheckResultUpdates,
   MondayTrustidClient,
 } from './lib/adapters/monday-trustid-v2.ts';
 
@@ -56,6 +57,7 @@ type FakeMondayCalls = {
   fetchedId: string[];
   idInviteSent: Array<{ itemId: string; updates: IdCheckInviteSentUpdates }>;
   idErrored: Array<{ itemId: string; updates: IdCheckErrorUpdates }>;
+  idResulted: Array<{ itemId: string; updates: IdCheckResultUpdates }>;
   fetchedDbs: string[];
   dbsInviteSent: Array<{ itemId: string; updates: DbsCheckInviteSentUpdates }>;
   dbsErrored: Array<{ itemId: string; updates: DbsCheckErrorUpdates }>;
@@ -69,6 +71,7 @@ function fakeMonday(items: {
     fetchedId: [],
     idInviteSent: [],
     idErrored: [],
+    idResulted: [],
     fetchedDbs: [],
     dbsInviteSent: [],
     dbsErrored: [],
@@ -85,6 +88,9 @@ function fakeMonday(items: {
     },
     markIdError: async (itemId, updates) => {
       calls.idErrored.push({ itemId, updates });
+    },
+    markIdResult: async (itemId, updates) => {
+      calls.idResulted.push({ itemId, updates });
     },
     fetchDbsItem: async (itemId: string): Promise<DbsCheckItem> => {
       calls.fetchedDbs.push(itemId);
@@ -105,6 +111,7 @@ function fakeMonday(items: {
 function buildWorkflow(
   trustidClient: TrustidClient,
   mondayClient: MondayTrustidClient,
+  options: { makeComIdWebhookUrl?: string } = {},
 ): Trustid {
   return new Trustid({
     trustidClient,
@@ -113,8 +120,27 @@ function buildWorkflow(
     idCheckStatusValues: idCheckBoard.statusValues,
     dbsCallbackUrl,
     dbsCheckStatusValues: dbsCheckBoard.statusValues,
+    makeComIdWebhookUrl: options.makeComIdWebhookUrl,
     now: fixedNow,
   });
+}
+
+// Records all fetch calls made via globalThis.fetch and replies with 200 {}.
+// Used to assert Make.com forwarding inside processIdCallback tests.
+type FetchCall = { url: string; init: RequestInit | undefined };
+function withRecordedFetch(): { calls: FetchCall[]; restore: () => void } {
+  const calls: FetchCall[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: typeof input === 'string' ? input : input.toString(), init });
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof globalThis.fetch;
+  return {
+    calls,
+    restore: () => {
+      globalThis.fetch = original;
+    },
+  };
 }
 
 test('createIdInvite: status sendInvite mints, updates Monday, returns created', async () => {
@@ -142,7 +168,7 @@ test('createIdInvite: status sendInvite mints, updates Monday, returns created',
     email: item.applicantEmail,
     name: item.applicantName,
     clientApplicationReference: item.itemId,
-    containerEventCallbackUrl: idCallbackUrl,
+    containerEventCallbackUrl: `${idCallbackUrl}?mondayItemId=${encodeURIComponent(item.itemId)}`,
   });
 
   assert.equal(calls.idInviteSent.length, 1);
@@ -413,4 +439,221 @@ test('createDbsInvite: routes to DBS callback URL, not ID callback URL', async (
 
   assert.deepEqual(callbackUrls, [dbsCallbackUrl]);
   assert.notEqual(callbackUrls[0], idCallbackUrl);
+});
+
+// -----------------------------------------------------------------------------
+// processIdCallback — result-path tests
+// -----------------------------------------------------------------------------
+
+const makeWebhookUrl = 'https://hook.make.test/webhooks/trustid-id';
+const sampleRawPayload = { ContainerId: 'c-9', ClientApplicationReference: 'item-1' };
+
+test('processIdCallback: passed container marks Monday and forwards to Make.com', async () => {
+  const item = idCheckItem({ status: idCheckBoard.statusValues.inviteSent });
+  const { client: monday, calls } = fakeMonday({ idCheck: item });
+  const trustid = fakeTrustid({
+    retrieveDocumentContainer: async () => ({
+      Success: true,
+      Container: { Documents: [{ Status: 'Pass', Notes: 'Document verified clear' }] },
+    }),
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComIdWebhookUrl: makeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processIdCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-9',
+      rawPayload: sampleRawPayload,
+    });
+
+    assert.equal(result.outcome, 'updated');
+    if (result.outcome !== 'updated') return;
+    assert.equal(result.idStatus, 'passed');
+    assert.equal(result.trustIdContainerId, 'c-9');
+
+    assert.equal(calls.idResulted.length, 1);
+    assert.equal(calls.idResulted[0].updates.status, idCheckBoard.statusValues.pass);
+    assert.equal(calls.idResulted[0].updates.lastUpdatedAt, '2026-05-03T10:00:00.000Z');
+
+    assert.equal(fetchRecorder.calls.length, 1);
+    assert.equal(fetchRecorder.calls[0].url, makeWebhookUrl);
+    assert.equal(fetchRecorder.calls[0].init?.method, 'POST');
+    assert.equal(fetchRecorder.calls[0].init?.body, JSON.stringify(sampleRawPayload));
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processIdCallback: failed/review/error containers map correctly', async () => {
+  const cases: Array<{
+    container: unknown;
+    expectedIdStatus: 'failed' | 'review' | 'error';
+    expectedStatusValue: string;
+  }> = [
+    {
+      container: { Documents: [{ Status: 'Failed', Notes: 'Document rejected as fraudulent' }] },
+      expectedIdStatus: 'failed',
+      expectedStatusValue: idCheckBoard.statusValues.fail,
+    },
+    {
+      container: { Documents: [{ Status: 'Review', Notes: 'Manual review required' }] },
+      expectedIdStatus: 'review',
+      expectedStatusValue: idCheckBoard.statusValues.refer,
+    },
+    {
+      container: { Documents: [{ Status: 'Error', Notes: 'Service unavailable' }] },
+      expectedIdStatus: 'error',
+      expectedStatusValue: idCheckBoard.statusValues.error,
+    },
+  ];
+
+  for (const c of cases) {
+    const item = idCheckItem({ status: idCheckBoard.statusValues.inviteSent });
+    const { client: monday, calls } = fakeMonday({ idCheck: item });
+    const trustid = fakeTrustid({
+      retrieveDocumentContainer: async () => ({ Success: true, Container: c.container }),
+    });
+    const workflow = buildWorkflow(trustid, monday);
+
+    const result = await workflow.processIdCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(result.outcome, 'updated');
+    if (result.outcome !== 'updated') return;
+    assert.equal(result.idStatus, c.expectedIdStatus);
+    assert.equal(calls.idResulted[0].updates.status, c.expectedStatusValue);
+  }
+});
+
+test('processIdCallback: terminal status (Pass) skips with already-terminal', async () => {
+  const item = idCheckItem({ status: idCheckBoard.statusValues.pass });
+  const { client: monday, calls } = fakeMonday({ idCheck: item });
+  let trustidCalled = false;
+  const trustid = fakeTrustid({
+    retrieveDocumentContainer: async () => {
+      trustidCalled = true;
+      throw new Error('should not be called');
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComIdWebhookUrl: makeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processIdCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(result.outcome, 'already-terminal');
+    if (result.outcome !== 'already-terminal') return;
+    assert.equal(result.currentStatus, idCheckBoard.statusValues.pass);
+    assert.equal(trustidCalled, false);
+    assert.equal(calls.idResulted.length, 0);
+    assert.equal(fetchRecorder.calls.length, 0);
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processIdCallback: empty mondayItemId throws TrustidValidationError', async () => {
+  const { client: monday, calls } = fakeMonday({ idCheck: idCheckItem() });
+  const workflow = buildWorkflow(fakeTrustid(), monday);
+
+  await assert.rejects(
+    () => workflow.processIdCallback({ mondayItemId: '   ', containerId: 'c', rawPayload: {} }),
+    (error: unknown) => error instanceof TrustidValidationError,
+  );
+  assert.equal(calls.idResulted.length, 0);
+});
+
+test('processIdCallback: TrustID retrieve throws -> error status, summary captures the message, Make still forwarded', async () => {
+  const item = idCheckItem({ status: idCheckBoard.statusValues.inviteSent });
+  const { client: monday, calls } = fakeMonday({ idCheck: item });
+  const trustid = fakeTrustid({
+    retrieveDocumentContainer: async () => {
+      throw new TrustidApiError('retrieve boom', 502, 'body');
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComIdWebhookUrl: makeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processIdCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: sampleRawPayload,
+    });
+
+    assert.equal(result.outcome, 'updated');
+    if (result.outcome !== 'updated') return;
+    assert.equal(result.idStatus, 'error');
+    assert.equal(result.summary, 'retrieve boom');
+
+    assert.equal(calls.idResulted[0].updates.status, idCheckBoard.statusValues.error);
+    assert.equal(calls.idResulted[0].updates.summary, 'retrieve boom');
+    assert.equal(fetchRecorder.calls.length, 1);
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processIdCallback: makeComIdWebhookUrl unset -> Monday update happens but fetch never called', async () => {
+  const item = idCheckItem({ status: idCheckBoard.statusValues.inviteSent });
+  const { client: monday, calls } = fakeMonday({ idCheck: item });
+  const trustid = fakeTrustid({
+    retrieveDocumentContainer: async () => ({
+      Success: true,
+      Container: { Documents: [{ Status: 'Pass' }] },
+    }),
+  });
+  const workflow = buildWorkflow(trustid, monday); // no makeComIdWebhookUrl
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    await workflow.processIdCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(calls.idResulted.length, 1);
+    assert.equal(fetchRecorder.calls.length, 0);
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processIdCallback: missing containerId in webhook AND on Monday item -> error, no TrustID retrieve', async () => {
+  const item = idCheckItem({
+    status: idCheckBoard.statusValues.inviteSent,
+    trustIdContainerId: null,
+  });
+  const { client: monday, calls } = fakeMonday({ idCheck: item });
+  let trustidCalled = false;
+  const trustid = fakeTrustid({
+    retrieveDocumentContainer: async () => {
+      trustidCalled = true;
+      throw new Error('should not be called');
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday);
+
+  const result = await workflow.processIdCallback({
+    mondayItemId: item.itemId,
+    containerId: null,
+    rawPayload: {},
+  });
+
+  assert.equal(result.outcome, 'updated');
+  if (result.outcome !== 'updated') return;
+  assert.equal(result.idStatus, 'error');
+  assert.equal(result.trustIdContainerId, null);
+  assert.match(result.summary, /No container ID/);
+  assert.equal(trustidCalled, false);
+  assert.equal(calls.idResulted[0].updates.status, idCheckBoard.statusValues.error);
 });

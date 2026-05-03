@@ -22,6 +22,8 @@ import type {
   DbsCheckErrorUpdates,
   DbsCheckInviteSentUpdates,
   DbsCheckItem,
+  DbsCheckResultUpdates,
+  DbsCheckSubmittedUpdates,
   IdCheckErrorUpdates,
   IdCheckInviteSentUpdates,
   IdCheckItem,
@@ -61,6 +63,8 @@ type FakeMondayCalls = {
   fetchedDbs: string[];
   dbsInviteSent: Array<{ itemId: string; updates: DbsCheckInviteSentUpdates }>;
   dbsErrored: Array<{ itemId: string; updates: DbsCheckErrorUpdates }>;
+  dbsSubmitted: Array<{ itemId: string; updates: DbsCheckSubmittedUpdates }>;
+  dbsResulted: Array<{ itemId: string; updates: DbsCheckResultUpdates }>;
 };
 
 function fakeMonday(items: {
@@ -75,6 +79,8 @@ function fakeMonday(items: {
     fetchedDbs: [],
     dbsInviteSent: [],
     dbsErrored: [],
+    dbsSubmitted: [],
+    dbsResulted: [],
   };
   const client: MondayTrustidClient = {
     fetchIdCheckItem: async (itemId: string): Promise<IdCheckItem> => {
@@ -104,6 +110,12 @@ function fakeMonday(items: {
     markDbsError: async (itemId, updates) => {
       calls.dbsErrored.push({ itemId, updates });
     },
+    markDbsSubmitted: async (itemId, updates) => {
+      calls.dbsSubmitted.push({ itemId, updates });
+    },
+    markDbsResult: async (itemId, updates) => {
+      calls.dbsResulted.push({ itemId, updates });
+    },
   };
   return { client, calls };
 }
@@ -111,7 +123,7 @@ function fakeMonday(items: {
 function buildWorkflow(
   trustidClient: TrustidClient,
   mondayClient: MondayTrustidClient,
-  options: { makeComIdWebhookUrl?: string } = {},
+  options: { makeComIdWebhookUrl?: string; makeComDbsWebhookUrl?: string } = {},
 ): Trustid {
   return new Trustid({
     trustidClient,
@@ -121,6 +133,7 @@ function buildWorkflow(
     dbsCallbackUrl,
     dbsCheckStatusValues: dbsCheckBoard.statusValues,
     makeComIdWebhookUrl: options.makeComIdWebhookUrl,
+    makeComDbsWebhookUrl: options.makeComDbsWebhookUrl,
     now: fixedNow,
   });
 }
@@ -324,7 +337,7 @@ test('createDbsInvite: status sendInvite mints, updates Monday, returns created'
     email: item.applicantEmail,
     name: item.applicantName,
     clientApplicationReference: item.itemId,
-    containerEventCallbackUrl: dbsCallbackUrl,
+    containerEventCallbackUrl: `${dbsCallbackUrl}?mondayItemId=${encodeURIComponent(item.itemId)}`,
   });
 
   assert.equal(calls.dbsInviteSent.length, 1);
@@ -437,8 +450,9 @@ test('createDbsInvite: routes to DBS callback URL, not ID callback URL', async (
 
   await workflow.createDbsInvite({ mondayItemId: item.itemId });
 
-  assert.deepEqual(callbackUrls, [dbsCallbackUrl]);
-  assert.notEqual(callbackUrls[0], idCallbackUrl);
+  assert.equal(callbackUrls.length, 1);
+  assert.match(callbackUrls[0], new RegExp(`^${dbsCallbackUrl.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\?mondayItemId=`));
+  assert.equal(callbackUrls[0].includes(idCallbackUrl), false);
 });
 
 // -----------------------------------------------------------------------------
@@ -656,4 +670,308 @@ test('processIdCallback: missing containerId in webhook AND on Monday item -> er
   assert.match(result.summary, /No container ID/);
   assert.equal(trustidCalled, false);
   assert.equal(calls.idResulted[0].updates.status, idCheckBoard.statusValues.error);
+});
+
+// -----------------------------------------------------------------------------
+// processDbsCallback — DBS two-step result-path tests
+// -----------------------------------------------------------------------------
+
+const dbsMakeWebhookUrl = 'https://hook.make.test/webhooks/trustid-dbs';
+
+test('processDbsCallback: first webhook (status sendInvite) initiates DBS with hardcoded fields, marks dbsSubmitted, forwards to Make', async () => {
+  const item = dbsCheckItem({ status: dbsCheckBoard.statusValues.sendInvite });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  let initiateRequest: unknown = null;
+  let retrieveFormCalled = false;
+  const trustid = fakeTrustid({
+    retrieveDbsForm: async () => {
+      retrieveFormCalled = true;
+      return { Success: true };
+    },
+    initiateBasicDbsCheck: async (request) => {
+      initiateRequest = request;
+      return { Success: true };
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComDbsWebhookUrl: dbsMakeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processDbsCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-dbs-1',
+      rawPayload: { hello: 'world' },
+    });
+
+    assert.equal(result.outcome, 'submitted');
+    if (result.outcome !== 'submitted') return;
+    assert.equal(result.trustIdContainerId, 'c-dbs-1');
+
+    assert.equal(retrieveFormCalled, true);
+    assert.deepEqual(initiateRequest, {
+      containerId: 'c-dbs-1',
+      employerName: 'Car Movers',
+      purposeOfCheck: 'Hiring',
+      employmentSector: 'DRIVERS',
+      applicationConsent: true,
+      candidateOriginalDocumentsChecked: true,
+      candidateAddressChecked: true,
+      candidateDateOfBirthChecked: true,
+      selfDeclarationCheck: true,
+    });
+
+    assert.equal(calls.dbsSubmitted.length, 1);
+    assert.equal(calls.dbsSubmitted[0].updates.status, dbsCheckBoard.statusValues.dbsSubmitted);
+    assert.equal(calls.dbsResulted.length, 0);
+    assert.equal(fetchRecorder.calls.length, 1);
+    assert.equal(fetchRecorder.calls[0].url, dbsMakeWebhookUrl);
+    assert.equal(fetchRecorder.calls[0].init?.body, JSON.stringify({ hello: 'world' }));
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processDbsCallback: first webhook with status null is treated as initial', async () => {
+  const item = dbsCheckItem({ status: null });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  const trustid = fakeTrustid({
+    retrieveDbsForm: async () => ({ Success: true }),
+    initiateBasicDbsCheck: async () => ({ Success: true }),
+  });
+  const workflow = buildWorkflow(trustid, monday);
+
+  const result = await workflow.processDbsCallback({
+    mondayItemId: item.itemId,
+    containerId: 'c-1',
+    rawPayload: {},
+  });
+
+  assert.equal(result.outcome, 'submitted');
+  assert.equal(calls.dbsSubmitted.length, 1);
+  assert.equal(calls.dbsResulted.length, 0);
+});
+
+test('processDbsCallback: second webhook (status dbsSubmitted) retrieves cert, marks Pass, forwards to Make', async () => {
+  const item = dbsCheckItem({
+    status: dbsCheckBoard.statusValues.dbsSubmitted,
+    trustIdContainerId: 'c-dbs-1',
+  });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  let initiateCalled = false;
+  const trustid = fakeTrustid({
+    initiateBasicDbsCheck: async () => {
+      initiateCalled = true;
+      throw new Error('should not be called');
+    },
+    retrieveDocumentContainer: async () => ({
+      Success: true,
+      Container: { DBSCheck: [{ Status: 'Pass', Notes: 'Certificate clear, no content' }] },
+    }),
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComDbsWebhookUrl: dbsMakeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processDbsCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-dbs-1',
+      rawPayload: { final: true },
+    });
+
+    assert.equal(result.outcome, 'updated');
+    if (result.outcome !== 'updated') return;
+    assert.equal(result.dbsStatus, 'passed');
+
+    assert.equal(initiateCalled, false);
+    assert.equal(calls.dbsResulted.length, 1);
+    assert.equal(calls.dbsResulted[0].updates.status, dbsCheckBoard.statusValues.pass);
+    assert.equal(fetchRecorder.calls.length, 1);
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processDbsCallback: second webhook maps failed/review/error correctly', async () => {
+  const cases: Array<{
+    container: unknown;
+    expectedDbsStatus: 'failed' | 'review' | 'error';
+    expectedStatusValue: string;
+  }> = [
+    {
+      container: { DBSCheck: [{ Status: 'Failed', Notes: 'Application rejected' }] },
+      expectedDbsStatus: 'failed',
+      expectedStatusValue: dbsCheckBoard.statusValues.fail,
+    },
+    {
+      container: { DBSCheck: [{ Status: 'Review', Notes: 'Manual review required' }] },
+      expectedDbsStatus: 'review',
+      expectedStatusValue: dbsCheckBoard.statusValues.refer,
+    },
+    {
+      container: { DBSCheck: [{ Status: 'Error', Notes: 'Service unavailable' }] },
+      expectedDbsStatus: 'error',
+      expectedStatusValue: dbsCheckBoard.statusValues.error,
+    },
+  ];
+
+  for (const c of cases) {
+    const item = dbsCheckItem({ status: dbsCheckBoard.statusValues.dbsSubmitted });
+    const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+    const trustid = fakeTrustid({
+      retrieveDocumentContainer: async () => ({ Success: true, Container: c.container }),
+    });
+    const workflow = buildWorkflow(trustid, monday);
+
+    const result = await workflow.processDbsCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(result.outcome, 'updated');
+    if (result.outcome !== 'updated') return;
+    assert.equal(result.dbsStatus, c.expectedDbsStatus);
+    assert.equal(calls.dbsResulted[0].updates.status, c.expectedStatusValue);
+  }
+});
+
+test('processDbsCallback: terminal status (Pass) skips with already-terminal', async () => {
+  const item = dbsCheckItem({ status: dbsCheckBoard.statusValues.pass });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  let trustidCalled = false;
+  const trustid = fakeTrustid({
+    retrieveDbsForm: async () => {
+      trustidCalled = true;
+      throw new Error('should not be called');
+    },
+    initiateBasicDbsCheck: async () => {
+      trustidCalled = true;
+      throw new Error('should not be called');
+    },
+    retrieveDocumentContainer: async () => {
+      trustidCalled = true;
+      throw new Error('should not be called');
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComDbsWebhookUrl: dbsMakeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processDbsCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(result.outcome, 'already-terminal');
+    if (result.outcome !== 'already-terminal') return;
+    assert.equal(result.currentStatus, dbsCheckBoard.statusValues.pass);
+    assert.equal(trustidCalled, false);
+    assert.equal(calls.dbsSubmitted.length, 0);
+    assert.equal(calls.dbsResulted.length, 0);
+    assert.equal(fetchRecorder.calls.length, 0);
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processDbsCallback: empty mondayItemId throws TrustidValidationError', async () => {
+  const { client: monday, calls } = fakeMonday({ dbsCheck: dbsCheckItem() });
+  const workflow = buildWorkflow(fakeTrustid(), monday);
+
+  await assert.rejects(
+    () => workflow.processDbsCallback({ mondayItemId: '   ', containerId: 'c', rawPayload: {} }),
+    (error: unknown) => error instanceof TrustidValidationError,
+  );
+  assert.equal(calls.dbsSubmitted.length, 0);
+  assert.equal(calls.dbsResulted.length, 0);
+});
+
+test('processDbsCallback: missing containerId on first webhook -> error, no initiate call', async () => {
+  const item = dbsCheckItem({
+    status: dbsCheckBoard.statusValues.sendInvite,
+    trustIdContainerId: null,
+  });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  let initiateCalled = false;
+  const trustid = fakeTrustid({
+    initiateBasicDbsCheck: async () => {
+      initiateCalled = true;
+      throw new Error('should not be called');
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday);
+
+  const result = await workflow.processDbsCallback({
+    mondayItemId: item.itemId,
+    containerId: null,
+    rawPayload: {},
+  });
+
+  assert.equal(result.outcome, 'updated');
+  if (result.outcome !== 'updated') return;
+  assert.equal(result.dbsStatus, 'error');
+  assert.match(result.summary, /No container ID/);
+  assert.equal(initiateCalled, false);
+  assert.equal(calls.dbsErrored.length, 1);
+});
+
+test('processDbsCallback: initiateBasicDbsCheck failure marks error, no rethrow', async () => {
+  const item = dbsCheckItem({ status: dbsCheckBoard.statusValues.sendInvite });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  const trustid = fakeTrustid({
+    retrieveDbsForm: async () => ({ Success: true }),
+    initiateBasicDbsCheck: async () => {
+      throw new TrustidApiError('initiate boom', 502, 'body');
+    },
+  });
+  const workflow = buildWorkflow(trustid, monday, { makeComDbsWebhookUrl: dbsMakeWebhookUrl });
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    const result = await workflow.processDbsCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(result.outcome, 'updated');
+    if (result.outcome !== 'updated') return;
+    assert.equal(result.dbsStatus, 'error');
+    assert.equal(result.summary, 'initiate boom');
+
+    assert.equal(calls.dbsErrored.length, 1);
+    assert.equal(calls.dbsErrored[0].updates.status, dbsCheckBoard.statusValues.error);
+    assert.equal(calls.dbsSubmitted.length, 0);
+    // Make.com still receives the raw payload — downstream may want to know we tried
+    assert.equal(fetchRecorder.calls.length, 1);
+  } finally {
+    fetchRecorder.restore();
+  }
+});
+
+test('processDbsCallback: makeComDbsWebhookUrl unset -> Monday update happens but fetch never called', async () => {
+  const item = dbsCheckItem({ status: dbsCheckBoard.statusValues.dbsSubmitted });
+  const { client: monday, calls } = fakeMonday({ dbsCheck: item });
+  const trustid = fakeTrustid({
+    retrieveDocumentContainer: async () => ({
+      Success: true,
+      Container: { DBSCheck: [{ Status: 'Pass' }] },
+    }),
+  });
+  const workflow = buildWorkflow(trustid, monday); // no makeComDbsWebhookUrl
+  const fetchRecorder = withRecordedFetch();
+
+  try {
+    await workflow.processDbsCallback({
+      mondayItemId: item.itemId,
+      containerId: 'c-1',
+      rawPayload: {},
+    });
+
+    assert.equal(calls.dbsResulted.length, 1);
+    assert.equal(fetchRecorder.calls.length, 0);
+  } finally {
+    fetchRecorder.restore();
+  }
 });

@@ -27,6 +27,8 @@ export {
   type DbsCheckItem,
   type DbsCheckInviteSentUpdates,
   type DbsCheckErrorUpdates,
+  type DbsCheckSubmittedUpdates,
+  type DbsCheckResultUpdates,
 } from './lib/adapters/monday-trustid-v2.ts';
 
 export {
@@ -38,7 +40,10 @@ export {
   type CreateDbsInviteResult,
   type ProcessIdCallbackRequest,
   type ProcessIdCallbackResult,
+  type ProcessDbsCallbackRequest,
+  type ProcessDbsCallbackResult,
   type IdCheckOutcome,
+  type DbsCheckOutcome,
   type TrustidWorkflowConfig,
 } from './lib/workflows/trustid-v2.ts';
 
@@ -50,4 +55,5 @@ export {
   type IdCheckBoardConfig,
   type DbsCheckBoardConfig,
   type StatusValues,
+  type DbsStatusValues,
 } from './lib/monday-boards.ts';

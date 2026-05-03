@@ -8,8 +8,16 @@ import type {
   IdCheckItem,
   DbsCheckItem,
 } from '../adapters/monday-trustid-v2.ts';
-import type { StatusValues } from '../monday-boards.ts';
+import type { DbsStatusValues, StatusValues } from '../monday-boards.ts';
 import { forwardToMake } from '../forward-to-make.ts';
+
+// Hardcoded BASIC DBS application fields per PRD #38. EmployerName and
+// PurposeOfCheck appear on the resulting certificate; verify the exact
+// strings TrustID's enum accepts before going to production.
+const DBS_EMPLOYER_NAME = 'Car Movers';
+const DBS_PURPOSE_OF_CHECK = 'Hiring';
+const DBS_EMPLOYMENT_SECTOR = 'DRIVERS';
+const DBS_APPLICATION_CONSENT = true;
 
 export class TrustidValidationError extends Error {
   constructor(message: string) {
@@ -76,14 +84,42 @@ export type ProcessIdCallbackResult =
       currentStatus: string;
     };
 
+export type DbsCheckOutcome = 'passed' | 'failed' | 'review' | 'error';
+
+export type ProcessDbsCallbackRequest = {
+  mondayItemId: string;
+  containerId: string | null;
+  rawPayload: unknown;
+};
+
+export type ProcessDbsCallbackResult =
+  | {
+      outcome: 'submitted';
+      mondayItemId: string;
+      trustIdContainerId: string;
+    }
+  | {
+      outcome: 'updated';
+      mondayItemId: string;
+      dbsStatus: DbsCheckOutcome;
+      trustIdContainerId: string | null;
+      summary: string;
+    }
+  | {
+      outcome: 'already-terminal';
+      mondayItemId: string;
+      currentStatus: string;
+    };
+
 export type TrustidWorkflowConfig = {
   trustidClient: TrustidClient;
   mondayClient: MondayTrustidClient;
   idCallbackUrl: string;
   idCheckStatusValues: StatusValues;
   dbsCallbackUrl: string;
-  dbsCheckStatusValues: StatusValues;
+  dbsCheckStatusValues: DbsStatusValues;
   makeComIdWebhookUrl?: string;
+  makeComDbsWebhookUrl?: string;
   now?: () => Date;
 };
 
@@ -93,8 +129,9 @@ export class Trustid {
   private idCallbackUrl: string;
   private idCheckStatusValues: StatusValues;
   private dbsCallbackUrl: string;
-  private dbsCheckStatusValues: StatusValues;
+  private dbsCheckStatusValues: DbsStatusValues;
   private makeComIdWebhookUrl: string | undefined;
+  private makeComDbsWebhookUrl: string | undefined;
   private now: () => Date;
 
   constructor(config: TrustidWorkflowConfig) {
@@ -105,6 +142,7 @@ export class Trustid {
     this.dbsCallbackUrl = config.dbsCallbackUrl;
     this.dbsCheckStatusValues = config.dbsCheckStatusValues;
     this.makeComIdWebhookUrl = config.makeComIdWebhookUrl;
+    this.makeComDbsWebhookUrl = config.makeComDbsWebhookUrl;
     this.now = config.now ?? (() => new Date());
   }
 
@@ -185,13 +223,16 @@ export class Trustid {
     }
 
     const inviteSentAt = this.now().toISOString();
+    // Encode mondayItemId in the callback URL so the webhook handler can route
+    // back even if TrustID's WorkflowStorage payload omits ClientApplicationReference.
+    const callbackUrl = `${this.dbsCallbackUrl}${this.dbsCallbackUrl.includes('?') ? '&' : '?'}mondayItemId=${encodeURIComponent(item.itemId)}`;
     let guestLink;
     try {
       guestLink = await this.trustidClient.createGuestLink({
         email: item.applicantEmail,
         name: item.applicantName,
         clientApplicationReference: item.itemId,
-        containerEventCallbackUrl: this.dbsCallbackUrl,
+        containerEventCallbackUrl: callbackUrl,
       });
     } catch (error) {
       const message = errorMessage(error);
@@ -299,6 +340,135 @@ export class Trustid {
   private idCheckMondayStatusFor(idStatus: IdCheckOutcome): string {
     const v = this.idCheckStatusValues;
     switch (idStatus) {
+      case 'passed':
+        return v.pass;
+      case 'failed':
+        return v.fail;
+      case 'review':
+        return v.refer;
+      case 'error':
+        return v.error;
+    }
+  }
+
+  async processDbsCallback(request: ProcessDbsCallbackRequest): Promise<ProcessDbsCallbackResult> {
+    const mondayItemId = request.mondayItemId?.trim();
+    if (!mondayItemId) throw new TrustidValidationError('Missing mondayItemId');
+
+    const item = await this.mondayClient.fetchDbsItem(mondayItemId);
+
+    if (this.isDbsTerminalStatus(item.status)) {
+      return {
+        outcome: 'already-terminal',
+        mondayItemId: item.itemId,
+        currentStatus: item.status as string,
+      };
+    }
+
+    const lastUpdatedAt = this.now().toISOString();
+    const containerId = request.containerId?.trim() || item.trustIdContainerId;
+
+    if (!containerId) {
+      const summary = 'No container ID in webhook or Monday item';
+      await this.mondayClient.markDbsError(item.itemId, {
+        status: this.dbsCheckStatusValues.error,
+        error: summary,
+        lastUpdatedAt,
+      });
+      await forwardToMake(request.rawPayload, this.makeComDbsWebhookUrl);
+      return {
+        outcome: 'updated',
+        mondayItemId: item.itemId,
+        dbsStatus: 'error',
+        trustIdContainerId: null,
+        summary,
+      };
+    }
+
+    // State machine: dbsSubmitted means we've already initiated DBS, so this
+    // is the second (cert) webhook. Anything else (null / inviteSent / etc.)
+    // is the first webhook — initiate DBS now.
+    const isSecondWebhook = item.status === this.dbsCheckStatusValues.dbsSubmitted;
+
+    if (!isSecondWebhook) {
+      try {
+        await this.trustidClient.retrieveDbsForm({ containerId });
+        await this.trustidClient.initiateBasicDbsCheck({
+          containerId,
+          employerName: DBS_EMPLOYER_NAME,
+          purposeOfCheck: DBS_PURPOSE_OF_CHECK,
+          employmentSector: DBS_EMPLOYMENT_SECTOR,
+          applicationConsent: DBS_APPLICATION_CONSENT,
+          candidateOriginalDocumentsChecked: true,
+          candidateAddressChecked: true,
+          candidateDateOfBirthChecked: true,
+          selfDeclarationCheck: true,
+        });
+      } catch (error) {
+        const message = errorMessage(error);
+        await this.mondayClient.markDbsError(item.itemId, {
+          status: this.dbsCheckStatusValues.error,
+          error: message,
+          lastUpdatedAt,
+        });
+        await forwardToMake(request.rawPayload, this.makeComDbsWebhookUrl);
+        return {
+          outcome: 'updated',
+          mondayItemId: item.itemId,
+          dbsStatus: 'error',
+          trustIdContainerId: containerId,
+          summary: message,
+        };
+      }
+
+      await this.mondayClient.markDbsSubmitted(item.itemId, {
+        status: this.dbsCheckStatusValues.dbsSubmitted,
+        lastUpdatedAt,
+      });
+      await forwardToMake(request.rawPayload, this.makeComDbsWebhookUrl);
+
+      return {
+        outcome: 'submitted',
+        mondayItemId: item.itemId,
+        trustIdContainerId: containerId,
+      };
+    }
+
+    // Second webhook — fetch the cert outcome and write to Monday.
+    let mapped: { idStatus: DbsCheckOutcome; summary: string };
+    try {
+      const container = await this.trustidClient.retrieveDocumentContainer({ containerId });
+      const idMapped = idStatusFromContainer(container);
+      mapped = { idStatus: idMapped.idStatus, summary: idMapped.summary };
+    } catch (error) {
+      mapped = { idStatus: 'error', summary: errorMessage(error) };
+    }
+
+    await this.mondayClient.markDbsResult(item.itemId, {
+      status: this.dbsCheckMondayStatusFor(mapped.idStatus),
+      summary: mapped.summary,
+      lastUpdatedAt,
+    });
+    await forwardToMake(request.rawPayload, this.makeComDbsWebhookUrl);
+
+    return {
+      outcome: 'updated',
+      mondayItemId: item.itemId,
+      dbsStatus: mapped.idStatus,
+      trustIdContainerId: containerId,
+      summary: mapped.summary,
+    };
+  }
+
+  private isDbsTerminalStatus(status: string | null): boolean {
+    if (status === null) return false;
+    const v = this.dbsCheckStatusValues;
+    return status === v.pass || status === v.refer || status === v.fail || status === v.error;
+  }
+
+  private dbsCheckMondayStatusFor(dbsStatus: DbsCheckOutcome): string {
+    const v = this.dbsCheckStatusValues;
+    switch (dbsStatus) {
       case 'passed':
         return v.pass;
       case 'failed':

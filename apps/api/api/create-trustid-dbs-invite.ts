@@ -1,97 +1,50 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
-  createTrustIdDbsInvite,
-  TrustIdDbsKickoffValidationError,
-  type TrustIdDbsKickoffConfig,
-  type TrustIdDbsKickoffRequest,
-} from '@car-movers/shared/trustid-dbs';
+  Trustid,
+  TrustidValidationError,
+} from '@car-movers/shared/lib/workflows/trustid';
+import {
+  TrustidApiClient,
+  loadTrustidConfigFromEnv,
+} from '@car-movers/shared/lib/adapters/trustid';
+import {
+  MondayTrustidApiClient,
+  loadMondayTrustidDbsConfigFromEnv,
+} from '@car-movers/shared/lib/adapters/monday';
+import { getRequestBaseUrl, hasValidInternalApiKey, readEnv } from './shared/endpoint.js';
 
-function readEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
-
-  return value;
+function readOptionalNumberEnv(name: string): number | undefined {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n)) throw new Error(`${name} must be an integer`);
+  return n;
 }
 
-function getRequestBaseUrl(request: VercelRequest) {
-  const host = request.headers['x-forwarded-host'] ?? request.headers.host;
-  const protocolHeader = request.headers['x-forwarded-proto'];
-  const protocol = Array.isArray(protocolHeader) ? protocolHeader[0] : protocolHeader ?? 'http';
+const trustidClient = new TrustidApiClient(loadTrustidConfigFromEnv());
+const mondayClient = new MondayTrustidApiClient({
+  dbs: loadMondayTrustidDbsConfigFromEnv(),
+});
+const trustid = new Trustid({
+  trustidClient,
+  mondayClient,
+  dbsInvite: {
+    branchId: readEnv('TRUSTID_BRANCH_ID'),
+    digitalIdentificationScheme: readOptionalNumberEnv('TRUSTID_DBS_DIGITAL_IDENTIFICATION_SCHEME'),
+  },
+});
 
-  return `${protocol}://${host}`;
-}
-
-function readApiKey(request: VercelRequest) {
-  const rawValue = request.headers['x-api-key'];
-  return Array.isArray(rawValue) ? rawValue[0] ?? null : rawValue ?? null;
-}
-
-function hasValidApiKey(request: VercelRequest) {
-  const providedApiKey = readApiKey(request);
-
-  if (!providedApiKey) {
-    return false;
-  }
-
-  const expectedApiKey = readEnv('INTERNAL_API_KEY');
-  const providedBuffer = Buffer.from(providedApiKey);
-  const expectedBuffer = Buffer.from(expectedApiKey);
-
-  if (providedBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(providedBuffer, expectedBuffer);
-}
-
-function readRequestBody(request: VercelRequest): TrustIdDbsKickoffRequest {
-  const body = request.body as Partial<TrustIdDbsKickoffRequest> | undefined;
+function readMondayItemId(request: VercelRequest): string {
+  const body = request.body as { mondayItemId?: string } | undefined;
   const mondayItemId = body?.mondayItemId?.trim();
-
-  if (!mondayItemId) {
-    throw new TrustIdDbsKickoffValidationError('Missing mondayItemId');
-  }
-
-  return { mondayItemId };
+  if (!mondayItemId) throw new TrustidValidationError('Missing mondayItemId');
+  return mondayItemId;
 }
 
-function getCallbackBaseUrl(request: VercelRequest) {
-  return process.env.TRUSTID_CALLBACK_BASE_URL?.trim() || getRequestBaseUrl(request);
-}
-
-function getTrustIdDbsKickoffConfig(request: VercelRequest): TrustIdDbsKickoffConfig {
-  return {
-    monday: {
-      token: readEnv('MONDAY_API_TOKEN'),
-      boardId: readEnv('DBS_BOARD_ID'),
-      columns: {
-        applicantName: readEnv('DBS_APPLICANT_NAME_COLUMN_ID'),
-        applicantEmail: readEnv('DBS_APPLICANT_EMAIL_COLUMN_ID'),
-        linkedDriverItem: readEnv('DBS_LINKED_DRIVER_ITEM_COLUMN_ID'),
-        status: readEnv('DBS_STATUS_COLUMN_ID'),
-        trustIdContainerId: readEnv('DBS_TRUSTID_CONTAINER_ID_COLUMN_ID'),
-        trustIdGuestId: readEnv('DBS_TRUSTID_GUEST_ID_COLUMN_ID'),
-        inviteCreatedAt: readEnv('DBS_INVITE_CREATED_AT_COLUMN_ID'),
-        dbsReference: readEnv('DBS_REFERENCE_COLUMN_ID'),
-        errorDetails: readEnv('DBS_ERROR_DETAILS_COLUMN_ID'),
-        processingTimestamp: readEnv('DBS_PROCESSING_TIMESTAMP_COLUMN_ID'),
-      },
-    },
-    trustId: {
-      baseUrl: process.env.TRUSTID_BASE_URL?.trim(),
-      apiKey: readEnv('TRUSTID_API_KEY'),
-      username: readEnv('TRUSTID_USERNAME'),
-      password: readEnv('TRUSTID_PASSWORD'),
-      deviceId: readEnv('TRUSTID_DEVICE_ID'),
-      branchId: readEnv('TRUSTID_BRANCH_ID'),
-    },
-    callbackBaseUrl: getCallbackBaseUrl(request),
-  };
+function callbackBaseUrl(request: VercelRequest): string {
+  const fromEnv = process.env.TRUSTID_CALLBACK_BASE_URL?.trim();
+  if (fromEnv) return fromEnv;
+  return getRequestBaseUrl(request);
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -99,45 +52,30 @@ export default async function handler(request: VercelRequest, response: VercelRe
   response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
 
-  if (request.method === 'OPTIONS') {
-    response.status(200).end();
-    return;
-  }
-
-  if (request.method !== 'POST') {
-    response.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
+  if (request.method === 'OPTIONS') return void response.status(200).end();
+  if (request.method !== 'POST') return void response.status(405).json({ error: 'Method not allowed' });
 
   try {
-    if (!hasValidApiKey(request)) {
-      response.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!hasValidInternalApiKey(request)) return void response.status(401).json({ error: 'Unauthorized' });
+    const mondayItemId = readMondayItemId(request);
+    const baseUrl = callbackBaseUrl(request);
 
-    const body = readRequestBody(request);
-
-    console.log('trustid.dbsInvite.handler', {
-      mondayItemId: body.mondayItemId,
-      hasApiKey: Boolean(readApiKey(request)),
-      callbackBaseUrl: getCallbackBaseUrl(request),
-      userAgent: request.headers['user-agent'] ?? null,
+    console.log('trustid.dbsInvite.received', {
+      monday_item_id: mondayItemId,
+      callback_base_url: baseUrl,
     });
-
-    const result = await createTrustIdDbsInvite(body, getTrustIdDbsKickoffConfig(request));
-
+    const result = await trustid.createDbsInvite({ mondayItemId, callbackBaseUrl: baseUrl });
     console.log('trustid.dbsInvite.success', {
-      mondayItemId: result.mondayItemId,
-      applicantEmail: result.applicantEmail,
-      trustIdContainerId: result.trustIdContainerId,
-      trustIdGuestId: result.trustIdGuestId,
+      monday_item_id: result.mondayItemId,
+      outcome: result.outcome,
+      trust_id_container_id: result.outcome === 'created' ? result.trustIdContainerId : null,
     });
 
     response.status(200).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create TrustID DBS invite';
-    const statusCode = error instanceof TrustIdDbsKickoffValidationError ? 400 : 500;
-    console.error('trustid.dbsInvite.error', { message });
-    response.status(statusCode).json({ error: message });
+    const status = error instanceof TrustidValidationError ? 400 : 500;
+    console.error('trustid.dbsInvite.error', { message, status });
+    response.status(status).json({ error: message });
   }
 }

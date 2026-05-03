@@ -1,46 +1,48 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
-  extractTrustIdIdCallbackRequest,
-  processTrustIdIdCallback,
-  TrustIdIdCallbackValidationError,
-  type TrustIdIdCallbackConfig,
-} from '@car-movers/shared/trustid-id';
+  Trustid,
+  TrustidValidationError,
+  type ProcessIdCallbackRequest,
+} from '@car-movers/shared/lib/workflows/trustid';
+import {
+  TrustidApiClient,
+  loadTrustidConfigFromEnv,
+} from '@car-movers/shared/lib/adapters/trustid';
+import {
+  MondayTrustidApiClient,
+  loadMondayTrustidIdCheckConfigFromEnv,
+} from '@car-movers/shared/lib/adapters/monday';
 
-function readEnv(name: string) {
-  const value = process.env[name];
+const trustidClient = new TrustidApiClient(loadTrustidConfigFromEnv());
+const mondayClient = new MondayTrustidApiClient({
+  idCheck: loadMondayTrustidIdCheckConfigFromEnv(),
+});
+const trustid = new Trustid({ trustidClient, mondayClient });
 
-  if (!value) {
-    throw new Error(`Missing ${name}`);
-  }
+function readCallbackRequest(request: VercelRequest): ProcessIdCallbackRequest {
+  const queryItemId = Array.isArray(request.query.mondayItemId)
+    ? request.query.mondayItemId[0]
+    : request.query.mondayItemId;
+  const body = (request.body ?? {}) as Record<string, unknown>;
 
-  return value;
+  const bodyItemId =
+    pickString(body.mondayItemId) ??
+    pickString(body.ClientApplicationReference) ??
+    pickString(body.clientApplicationReference);
+  const bodyContainerId =
+    pickString(body.ContainerId) ??
+    pickString(body.containerId) ??
+    pickString(body.GuestId) ??
+    pickString(body.guestId);
+
+  const mondayItemId = (queryItemId ?? bodyItemId)?.trim();
+  if (!mondayItemId) throw new TrustidValidationError('Missing mondayItemId');
+
+  return { mondayItemId, containerId: bodyContainerId?.trim() || null };
 }
 
-function getTrustIdIdCallbackConfig(): TrustIdIdCallbackConfig {
-  return {
-    monday: {
-      token: readEnv('MONDAY_API_TOKEN'),
-      boardId: readEnv('TRUSTID_ID_BOARD_ID'),
-      columns: {
-        applicantName: readEnv('TRUSTID_ID_APPLICANT_NAME_COLUMN_ID'),
-        applicantEmail: readEnv('TRUSTID_ID_APPLICANT_EMAIL_COLUMN_ID'),
-        status: readEnv('TRUSTID_ID_STATUS_COLUMN_ID'),
-        trustIdContainerId: readEnv('TRUSTID_ID_CONTAINER_ID_COLUMN_ID'),
-        trustIdGuestId: readEnv('TRUSTID_ID_GUEST_ID_COLUMN_ID'),
-        inviteCreatedAt: readEnv('TRUSTID_ID_INVITE_CREATED_AT_COLUMN_ID'),
-        resultSummary: readEnv('TRUSTID_ID_RESULT_SUMMARY_COLUMN_ID'),
-        errorDetails: readEnv('TRUSTID_ID_ERROR_DETAILS_COLUMN_ID'),
-        processingTimestamp: readEnv('TRUSTID_ID_PROCESSING_TIMESTAMP_COLUMN_ID'),
-      },
-    },
-    trustId: {
-      baseUrl: process.env.TRUSTID_BASE_URL?.trim(),
-      apiKey: readEnv('TRUSTID_API_KEY'),
-      username: readEnv('TRUSTID_USERNAME'),
-      password: readEnv('TRUSTID_PASSWORD'),
-      deviceId: readEnv('TRUSTID_DEVICE_ID'),
-    },
-  };
+function pickString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -48,48 +50,29 @@ export default async function handler(request: VercelRequest, response: VercelRe
   response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (request.method === 'OPTIONS') {
-    response.status(200).end();
-    return;
-  }
-
-  if (request.method !== 'POST') {
-    response.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
+  if (request.method === 'OPTIONS') return void response.status(200).end();
+  if (request.method !== 'POST') return void response.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const callbackRequest = extractTrustIdIdCallbackRequest(
-      request.query,
-      request.body as Record<string, unknown> | undefined,
-    );
+    const callbackRequest = readCallbackRequest(request);
 
     console.log('trustid.idCallback.received', {
-      mondayItemId: callbackRequest.mondayItemId,
-      containerId: callbackRequest.containerId ?? null,
-      userAgent: request.headers['user-agent'] ?? null,
-      contentType: request.headers['content-type'] ?? null,
+      monday_item_id: callbackRequest.mondayItemId,
+      container_id: callbackRequest.containerId ?? null,
     });
-
-    const result = await processTrustIdIdCallback(callbackRequest, getTrustIdIdCallbackConfig());
-
+    const result = await trustid.processIdCallback(callbackRequest);
     console.log('trustid.idCallback.success', {
-      mondayItemId: result.mondayItemId,
-      trustIdContainerId: result.trustIdContainerId,
+      monday_item_id: result.mondayItemId,
       outcome: result.outcome,
-      idStatus: result.idStatus,
-      status: result.status,
+      id_status: result.idStatus,
+      trust_id_container_id: result.trustIdContainerId,
     });
 
-    response.status(200).json({
-      received: true,
-      processed: true,
-      ...result,
-    });
+    response.status(200).json({ received: true, processed: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'TrustID ID callback handling failed';
-    const statusCode = error instanceof TrustIdIdCallbackValidationError ? 400 : 500;
-    console.error('trustid.idCallback.error', { message });
-    response.status(statusCode).json({ error: message });
+    const status = error instanceof TrustidValidationError ? 400 : 500;
+    console.error('trustid.idCallback.error', { message, status });
+    response.status(status).json({ error: message });
   }
 }

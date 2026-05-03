@@ -21,130 +21,6 @@ export type MondayItem = {
   column_values: MondayColumnValue[];
 };
 
-export type MondayDbsColumnConfig = {
-  applicantName: string;
-  applicantEmail: string;
-  linkedDriverItem: string;
-  status: string;
-  trustIdContainerId: string;
-  trustIdGuestId: string;
-  inviteCreatedAt: string;
-  dbsReference: string;
-  errorDetails: string;
-  processingTimestamp: string;
-};
-
-export type MondayDbsBoardConfig = {
-  token: string;
-  boardId: string;
-  columns: MondayDbsColumnConfig;
-};
-
-export type MondayDbsItem = {
-  itemId: string;
-  applicantName: string;
-  applicantEmail: string;
-  linkedDriverItemId: string | null;
-  status: string | null;
-  trustIdContainerId: string | null;
-  trustIdGuestId: string | null;
-  inviteCreatedAt: string | null;
-  dbsReference: string | null;
-  errorDetails: string | null;
-  processingTimestamp: string | null;
-};
-
-export type MondayDbsItemUpdates = {
-  status?: string | null;
-  trustIdContainerId?: string | null;
-  trustIdGuestId?: string | null;
-  inviteCreatedAt?: string | null;
-  dbsReference?: string | null;
-  errorDetails?: string | null;
-  processingTimestamp?: string | null;
-};
-
-export type MondayTrustIdIdCheckColumnConfig = {
-  applicantName: string;
-  applicantEmail: string;
-  status: string;
-  trustIdContainerId: string;
-  trustIdGuestId: string;
-  inviteCreatedAt: string;
-  resultSummary: string;
-  errorDetails: string;
-  processingTimestamp: string;
-};
-
-export type MondayTrustIdIdCheckBoardConfig = {
-  token: string;
-  boardId: string;
-  columns: MondayTrustIdIdCheckColumnConfig;
-};
-
-export type MondayTrustIdIdCheckItem = {
-  itemId: string;
-  applicantName: string;
-  applicantEmail: string;
-  status: string | null;
-  trustIdContainerId: string | null;
-  trustIdGuestId: string | null;
-  inviteCreatedAt: string | null;
-  resultSummary: string | null;
-  errorDetails: string | null;
-  processingTimestamp: string | null;
-};
-
-export type MondayTrustIdIdCheckItemUpdates = {
-  status?: string | null;
-  trustIdContainerId?: string | null;
-  trustIdGuestId?: string | null;
-  inviteCreatedAt?: string | null;
-  resultSummary?: string | null;
-  errorDetails?: string | null;
-  processingTimestamp?: string | null;
-};
-
-type MondayDbsItemQueryResponse = {
-  items?: MondayItem[];
-};
-
-type MondayChangeMultipleColumnValuesResponse = {
-  change_multiple_column_values?: {
-    id: string;
-  };
-};
-
-export class MondayDbsItemMissingFieldError extends Error {
-  itemId: string;
-  fieldName: string;
-
-  constructor(
-    itemId: string,
-    fieldName: string,
-  ) {
-    super(`DBS item ${itemId} is missing ${fieldName}`);
-    this.name = 'MondayDbsItemMissingFieldError';
-    this.itemId = itemId;
-    this.fieldName = fieldName;
-  }
-}
-
-export class MondayTrustIdIdCheckItemMissingFieldError extends Error {
-  itemId: string;
-  fieldName: string;
-
-  constructor(
-    itemId: string,
-    fieldName: string,
-  ) {
-    super(`TrustID ID-check item ${itemId} is missing ${fieldName}`);
-    this.name = 'MondayTrustIdIdCheckItemMissingFieldError';
-    this.itemId = itemId;
-    this.fieldName = fieldName;
-  }
-}
-
 export async function mondayRequest<T>(
   query: string,
   variables: Record<string, unknown>,
@@ -156,10 +32,7 @@ export async function mondayRequest<T>(
       'Content-Type': 'application/json',
       Authorization: token,
     },
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
+    body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
@@ -183,9 +56,7 @@ export async function mondayRequest<T>(
 }
 
 type MondayChangeColumnValueResponse = {
-  change_simple_column_value?: {
-    id: string;
-  };
+  change_simple_column_value?: { id: string };
 };
 
 export async function updateMondayStatus(
@@ -211,15 +82,314 @@ export async function updateMondayStatus(
   );
 }
 
-function escapeGraphQlString(value: string) {
+// ---------------------------------------------------------------------------
+// TrustID-specific Monday boards (DBS + ID-Check)
+// ---------------------------------------------------------------------------
+
+export type MondayTrustidDbsColumnConfig = {
+  applicantName: string;
+  applicantEmail: string;
+  linkedDriverItem: string;
+  status: string;
+  trustIdContainerId: string;
+  trustIdGuestId: string;
+  inviteCreatedAt: string;
+  dbsReference: string;
+  errorDetails: string;
+  processingTimestamp: string;
+};
+
+export type MondayTrustidDbsBoardConfig = {
+  token: string;
+  boardId: string;
+  columns: MondayTrustidDbsColumnConfig;
+};
+
+export type MondayTrustidDbsItem = {
+  itemId: string;
+  applicantName: string;
+  applicantEmail: string;
+  linkedDriverItemId: string | null;
+  status: string | null;
+  trustIdContainerId: string | null;
+  trustIdGuestId: string | null;
+  inviteCreatedAt: string | null;
+  dbsReference: string | null;
+  errorDetails: string | null;
+  processingTimestamp: string | null;
+};
+
+export type MondayTrustidDbsUpdates = {
+  status?: string | null;
+  trustIdContainerId?: string | null;
+  trustIdGuestId?: string | null;
+  inviteCreatedAt?: string | null;
+  dbsReference?: string | null;
+  errorDetails?: string | null;
+  processingTimestamp?: string | null;
+};
+
+export type MondayTrustidIdCheckColumnConfig = {
+  applicantName: string;
+  applicantEmail: string;
+  status: string;
+  trustIdContainerId: string;
+  trustIdGuestId: string;
+  inviteCreatedAt: string;
+  resultSummary: string;
+  errorDetails: string;
+  processingTimestamp: string;
+};
+
+export type MondayTrustidIdCheckBoardConfig = {
+  token: string;
+  boardId: string;
+  columns: MondayTrustidIdCheckColumnConfig;
+};
+
+export type MondayTrustidIdCheckItem = {
+  itemId: string;
+  applicantName: string;
+  applicantEmail: string;
+  status: string | null;
+  trustIdContainerId: string | null;
+  trustIdGuestId: string | null;
+  inviteCreatedAt: string | null;
+  resultSummary: string | null;
+  errorDetails: string | null;
+  processingTimestamp: string | null;
+};
+
+export type MondayTrustidIdCheckUpdates = {
+  status?: string | null;
+  trustIdContainerId?: string | null;
+  trustIdGuestId?: string | null;
+  inviteCreatedAt?: string | null;
+  resultSummary?: string | null;
+  errorDetails?: string | null;
+  processingTimestamp?: string | null;
+};
+
+export type MondayTrustidConfig = {
+  idCheck?: MondayTrustidIdCheckBoardConfig;
+  dbs?: MondayTrustidDbsBoardConfig;
+};
+
+export class MondayTrustidItemMissingFieldError extends Error {
+  readonly kind: 'id-check' | 'dbs';
+  readonly itemId: string;
+  readonly fieldName: string;
+
+  constructor(kind: 'id-check' | 'dbs', itemId: string, fieldName: string) {
+    super(`TrustID ${kind} item ${itemId} is missing ${fieldName}`);
+    this.name = 'MondayTrustidItemMissingFieldError';
+    this.kind = kind;
+    this.itemId = itemId;
+    this.fieldName = fieldName;
+  }
+}
+
+export interface MondayTrustidClient {
+  fetchIdCheckItem(itemId: string): Promise<MondayTrustidIdCheckItem>;
+  updateIdCheckItem(itemId: string, updates: MondayTrustidIdCheckUpdates): Promise<void>;
+  fetchDbsItem(itemId: string): Promise<MondayTrustidDbsItem>;
+  updateDbsItem(itemId: string, updates: MondayTrustidDbsUpdates): Promise<void>;
+}
+
+type MondayItemQueryResponse = { items?: MondayItem[] };
+type MondayChangeMultipleColumnValuesResponse = {
+  change_multiple_column_values?: { id: string };
+};
+
+export class MondayTrustidApiClient implements MondayTrustidClient {
+  private config: MondayTrustidConfig;
+
+  constructor(config: MondayTrustidConfig) {
+    this.config = config;
+  }
+
+  async fetchIdCheckItem(itemId: string): Promise<MondayTrustidIdCheckItem> {
+    const board = this.requireIdCheckConfig();
+    const item = await this.fetchItem(itemId, board.boardId, board.token, idCheckColumnSelection(board.columns));
+    if (!item) {
+      throw new Error(`TrustID ID-check item ${itemId} not found on configured board ${board.boardId}`);
+    }
+    return mapIdCheckItem(item, board.columns);
+  }
+
+  async updateIdCheckItem(itemId: string, updates: MondayTrustidIdCheckUpdates): Promise<void> {
+    const board = this.requireIdCheckConfig();
+    const columnValues: Record<string, string | null> = {};
+    setIfDefined(columnValues, board.columns.status, updates.status);
+    setIfDefined(columnValues, board.columns.trustIdContainerId, updates.trustIdContainerId);
+    setIfDefined(columnValues, board.columns.trustIdGuestId, updates.trustIdGuestId);
+    setIfDefined(columnValues, board.columns.inviteCreatedAt, updates.inviteCreatedAt);
+    setIfDefined(columnValues, board.columns.resultSummary, updates.resultSummary);
+    setIfDefined(columnValues, board.columns.errorDetails, updates.errorDetails);
+    setIfDefined(columnValues, board.columns.processingTimestamp, updates.processingTimestamp);
+    await this.changeMultipleColumnValues(itemId, board.boardId, board.token, columnValues);
+  }
+
+  async fetchDbsItem(itemId: string): Promise<MondayTrustidDbsItem> {
+    const board = this.requireDbsConfig();
+    const item = await this.fetchItem(itemId, board.boardId, board.token, dbsColumnSelection(board.columns));
+    if (!item) {
+      throw new Error(`TrustID DBS item ${itemId} not found on configured board ${board.boardId}`);
+    }
+    return mapDbsItem(item, board.columns);
+  }
+
+  async updateDbsItem(itemId: string, updates: MondayTrustidDbsUpdates): Promise<void> {
+    const board = this.requireDbsConfig();
+    const columnValues: Record<string, string | null> = {};
+    setIfDefined(columnValues, board.columns.status, updates.status);
+    setIfDefined(columnValues, board.columns.trustIdContainerId, updates.trustIdContainerId);
+    setIfDefined(columnValues, board.columns.trustIdGuestId, updates.trustIdGuestId);
+    setIfDefined(columnValues, board.columns.inviteCreatedAt, updates.inviteCreatedAt);
+    setIfDefined(columnValues, board.columns.dbsReference, updates.dbsReference);
+    setIfDefined(columnValues, board.columns.errorDetails, updates.errorDetails);
+    setIfDefined(columnValues, board.columns.processingTimestamp, updates.processingTimestamp);
+    await this.changeMultipleColumnValues(itemId, board.boardId, board.token, columnValues);
+  }
+
+  private requireIdCheckConfig(): MondayTrustidIdCheckBoardConfig {
+    if (!this.config.idCheck) {
+      throw new Error('MondayTrustidApiClient: idCheck board config not provided');
+    }
+    return this.config.idCheck;
+  }
+
+  private requireDbsConfig(): MondayTrustidDbsBoardConfig {
+    if (!this.config.dbs) {
+      throw new Error('MondayTrustidApiClient: dbs board config not provided');
+    }
+    return this.config.dbs;
+  }
+
+  private async fetchItem(
+    itemId: string,
+    boardId: string,
+    token: string,
+    columnSelection: string,
+  ): Promise<MondayItem | null> {
+    const data = await mondayRequest<MondayItemQueryResponse>(
+      `
+        query TrustidItem($itemIds: [ID!]!) {
+          items(ids: $itemIds) {
+            id
+            name
+            board { id }
+            column_values(ids: [${columnSelection}]) {
+              id
+              text
+              value
+            }
+          }
+        }
+      `,
+      { itemIds: [itemId] },
+      token,
+    );
+
+    const item = data.items?.[0];
+    if (!item || item.board?.id !== boardId) return null;
+    return item;
+  }
+
+  private async changeMultipleColumnValues(
+    itemId: string,
+    boardId: string,
+    token: string,
+    columnValues: Record<string, string | null>,
+  ): Promise<void> {
+    await mondayRequest<MondayChangeMultipleColumnValuesResponse>(
+      `
+        mutation UpdateTrustidItem($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
+          change_multiple_column_values(board_id: $boardId, item_id: $itemId, column_values: $columnValues) {
+            id
+          }
+        }
+      `,
+      {
+        boardId,
+        itemId,
+        columnValues: JSON.stringify(columnValues),
+      },
+      token,
+    );
+  }
+}
+
+export function loadMondayTrustidIdCheckConfigFromEnv(): MondayTrustidIdCheckBoardConfig {
+  return {
+    token: readEnv('MONDAY_API_TOKEN'),
+    boardId: readEnv('TRUSTID_ID_BOARD_ID'),
+    columns: {
+      applicantName: readEnv('TRUSTID_ID_APPLICANT_NAME_COLUMN_ID'),
+      applicantEmail: readEnv('TRUSTID_ID_APPLICANT_EMAIL_COLUMN_ID'),
+      status: readEnv('TRUSTID_ID_STATUS_COLUMN_ID'),
+      trustIdContainerId: readEnv('TRUSTID_ID_CONTAINER_ID_COLUMN_ID'),
+      trustIdGuestId: readEnv('TRUSTID_ID_GUEST_ID_COLUMN_ID'),
+      inviteCreatedAt: readEnv('TRUSTID_ID_INVITE_CREATED_AT_COLUMN_ID'),
+      resultSummary: readEnv('TRUSTID_ID_RESULT_SUMMARY_COLUMN_ID'),
+      errorDetails: readEnv('TRUSTID_ID_ERROR_DETAILS_COLUMN_ID'),
+      processingTimestamp: readEnv('TRUSTID_ID_PROCESSING_TIMESTAMP_COLUMN_ID'),
+    },
+  };
+}
+
+export function loadMondayTrustidDbsConfigFromEnv(): MondayTrustidDbsBoardConfig {
+  return {
+    token: readEnv('MONDAY_API_TOKEN'),
+    boardId: readEnv('DBS_BOARD_ID'),
+    columns: {
+      applicantName: readEnv('DBS_APPLICANT_NAME_COLUMN_ID'),
+      applicantEmail: readEnv('DBS_APPLICANT_EMAIL_COLUMN_ID'),
+      linkedDriverItem: readEnv('DBS_LINKED_DRIVER_ITEM_COLUMN_ID'),
+      status: readEnv('DBS_STATUS_COLUMN_ID'),
+      trustIdContainerId: readEnv('DBS_TRUSTID_CONTAINER_ID_COLUMN_ID'),
+      trustIdGuestId: readEnv('DBS_TRUSTID_GUEST_ID_COLUMN_ID'),
+      inviteCreatedAt: readEnv('DBS_INVITE_CREATED_AT_COLUMN_ID'),
+      dbsReference: readEnv('DBS_REFERENCE_COLUMN_ID'),
+      errorDetails: readEnv('DBS_ERROR_DETAILS_COLUMN_ID'),
+      processingTimestamp: readEnv('DBS_PROCESSING_TIMESTAMP_COLUMN_ID'),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// File-private helpers
+// ---------------------------------------------------------------------------
+
+function readEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing ${name}`);
+  return value;
+}
+
+function escapeGraphQlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function uniqueValues(values: string[]) {
-  return [...new Set(values)];
+function buildColumnSelection(columnIds: string[]): string {
+  return [...new Set(columnIds)].map(escapeGraphQlString).join(', ');
 }
 
-function buildDbsColumnSelection(columns: MondayDbsColumnConfig) {
+function idCheckColumnSelection(columns: MondayTrustidIdCheckColumnConfig): string {
+  return buildColumnSelection([
+    columns.applicantName,
+    columns.applicantEmail,
+    columns.status,
+    columns.trustIdContainerId,
+    columns.trustIdGuestId,
+    columns.inviteCreatedAt,
+    columns.resultSummary,
+    columns.errorDetails,
+    columns.processingTimestamp,
+  ]);
+}
+
+function dbsColumnSelection(columns: MondayTrustidDbsColumnConfig): string {
   return buildColumnSelection([
     columns.applicantName,
     columns.applicantEmail,
@@ -234,45 +404,19 @@ function buildDbsColumnSelection(columns: MondayDbsColumnConfig) {
   ]);
 }
 
-function buildTrustIdIdCheckColumnSelection(columns: MondayTrustIdIdCheckColumnConfig) {
-  return buildColumnSelection([
-    columns.applicantName,
-    columns.applicantEmail,
-    columns.status,
-    columns.trustIdContainerId,
-    columns.trustIdGuestId,
-    columns.inviteCreatedAt,
-    columns.resultSummary,
-    columns.errorDetails,
-    columns.processingTimestamp,
-  ]);
+function readColumn(item: MondayItem, columnId: string): MondayColumnValue | null {
+  return item.column_values.find((c) => c.id === columnId) ?? null;
 }
 
-function buildColumnSelection(columnIds: string[]) {
-  return uniqueValues(columnIds)
-    .map((columnId) => escapeGraphQlString(columnId))
-    .join(', ');
+function normalizeText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
-function readColumn(item: MondayItem, columnId: string) {
-  return item.column_values.find((column) => column.id === columnId) ?? null;
-}
-
-function normalizeText(value: string | null | undefined) {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
-function parseLinkedItemId(column: MondayColumnValue | null) {
+function parseLinkedItemId(column: MondayColumnValue | null): string | null {
   const textValue = normalizeText(column?.text);
-
-  if (textValue) {
-    return textValue;
-  }
-
-  if (!column?.value) {
-    return null;
-  }
+  if (textValue) return textValue;
+  if (!column?.value) return null;
 
   try {
     const parsed = JSON.parse(column.value) as {
@@ -292,52 +436,30 @@ function parseLinkedItemId(column: MondayColumnValue | null) {
   }
 }
 
-function requireDbsField(itemId: string, fieldName: string, value: string | null) {
-  if (!value) {
-    throw new MondayDbsItemMissingFieldError(itemId, fieldName);
-  }
-
-  return value;
+function setIfDefined(
+  values: Record<string, string | null>,
+  columnId: string,
+  value: string | null | undefined,
+): void {
+  if (value !== undefined) values[columnId] = value;
 }
 
-function requireTrustIdIdCheckField(itemId: string, fieldName: string, value: string | null) {
-  if (!value) {
-    throw new MondayTrustIdIdCheckItemMissingFieldError(itemId, fieldName);
-  }
-
-  return value;
-}
-
-function mapDbsItem(item: MondayItem, columns: MondayDbsColumnConfig): MondayDbsItem {
-  const applicantName = normalizeText(readColumn(item, columns.applicantName)?.text);
-  const applicantEmail = normalizeText(readColumn(item, columns.applicantEmail)?.text);
-
-  return {
-    itemId: item.id,
-    applicantName: requireDbsField(item.id, 'applicant name', applicantName),
-    applicantEmail: requireDbsField(item.id, 'applicant email', applicantEmail),
-    linkedDriverItemId: parseLinkedItemId(readColumn(item, columns.linkedDriverItem)),
-    status: normalizeText(readColumn(item, columns.status)?.text),
-    trustIdContainerId: normalizeText(readColumn(item, columns.trustIdContainerId)?.text),
-    trustIdGuestId: normalizeText(readColumn(item, columns.trustIdGuestId)?.text),
-    inviteCreatedAt: normalizeText(readColumn(item, columns.inviteCreatedAt)?.text),
-    dbsReference: normalizeText(readColumn(item, columns.dbsReference)?.text),
-    errorDetails: normalizeText(readColumn(item, columns.errorDetails)?.text),
-    processingTimestamp: normalizeText(readColumn(item, columns.processingTimestamp)?.text),
-  };
-}
-
-function mapTrustIdIdCheckItem(
+function mapIdCheckItem(
   item: MondayItem,
-  columns: MondayTrustIdIdCheckColumnConfig,
-): MondayTrustIdIdCheckItem {
+  columns: MondayTrustidIdCheckColumnConfig,
+): MondayTrustidIdCheckItem {
   const applicantName = normalizeText(readColumn(item, columns.applicantName)?.text);
   const applicantEmail = normalizeText(readColumn(item, columns.applicantEmail)?.text);
-
+  if (!applicantName) {
+    throw new MondayTrustidItemMissingFieldError('id-check', item.id, 'applicant name');
+  }
+  if (!applicantEmail) {
+    throw new MondayTrustidItemMissingFieldError('id-check', item.id, 'applicant email');
+  }
   return {
     itemId: item.id,
-    applicantName: requireTrustIdIdCheckField(item.id, 'applicant name', applicantName),
-    applicantEmail: requireTrustIdIdCheckField(item.id, 'applicant email', applicantEmail),
+    applicantName,
+    applicantEmail,
     status: normalizeText(readColumn(item, columns.status)?.text),
     trustIdContainerId: normalizeText(readColumn(item, columns.trustIdContainerId)?.text),
     trustIdGuestId: normalizeText(readColumn(item, columns.trustIdGuestId)?.text),
@@ -348,145 +470,29 @@ function mapTrustIdIdCheckItem(
   };
 }
 
-export async function fetchMondayDbsItem(itemId: string, config: MondayDbsBoardConfig) {
-  const data = await mondayRequest<MondayDbsItemQueryResponse>(
-    `
-      query DbsItem($itemIds: [ID!]!) {
-        items(ids: $itemIds) {
-          id
-          name
-          board {
-            id
-          }
-          column_values(ids: [${buildDbsColumnSelection(config.columns)}]) {
-            id
-            text
-            value
-          }
-        }
-      }
-    `,
-    {
-      itemIds: [itemId],
-    },
-    config.token,
-  );
-
-  const item = data.items?.[0];
-
-  if (!item || item.board?.id !== config.boardId) {
-    throw new Error(`DBS item ${itemId} not found on configured board ${config.boardId}`);
+function mapDbsItem(
+  item: MondayItem,
+  columns: MondayTrustidDbsColumnConfig,
+): MondayTrustidDbsItem {
+  const applicantName = normalizeText(readColumn(item, columns.applicantName)?.text);
+  const applicantEmail = normalizeText(readColumn(item, columns.applicantEmail)?.text);
+  if (!applicantName) {
+    throw new MondayTrustidItemMissingFieldError('dbs', item.id, 'applicant name');
   }
-
-  return mapDbsItem(item, config.columns);
-}
-
-export async function fetchMondayTrustIdIdCheckItem(
-  itemId: string,
-  config: MondayTrustIdIdCheckBoardConfig,
-) {
-  const data = await mondayRequest<MondayDbsItemQueryResponse>(
-    `
-      query TrustIdIdCheckItem($itemIds: [ID!]!) {
-        items(ids: $itemIds) {
-          id
-          name
-          board {
-            id
-          }
-          column_values(ids: [${buildTrustIdIdCheckColumnSelection(config.columns)}]) {
-            id
-            text
-            value
-          }
-        }
-      }
-    `,
-    {
-      itemIds: [itemId],
-    },
-    config.token,
-  );
-
-  const item = data.items?.[0];
-
-  if (!item || item.board?.id !== config.boardId) {
-    throw new Error(`TrustID ID-check item ${itemId} not found on configured board ${config.boardId}`);
+  if (!applicantEmail) {
+    throw new MondayTrustidItemMissingFieldError('dbs', item.id, 'applicant email');
   }
-
-  return mapTrustIdIdCheckItem(item, config.columns);
-}
-
-function setIfConfigured(
-  values: Record<string, string | null>,
-  columnId: string,
-  value: string | null | undefined,
-) {
-  if (value !== undefined) {
-    values[columnId] = value;
-  }
-}
-
-export async function updateMondayDbsItem(
-  itemId: string,
-  updates: MondayDbsItemUpdates,
-  config: MondayDbsBoardConfig,
-) {
-  const columnValues: Record<string, string | null> = {};
-
-  setIfConfigured(columnValues, config.columns.status, updates.status);
-  setIfConfigured(columnValues, config.columns.trustIdContainerId, updates.trustIdContainerId);
-  setIfConfigured(columnValues, config.columns.trustIdGuestId, updates.trustIdGuestId);
-  setIfConfigured(columnValues, config.columns.inviteCreatedAt, updates.inviteCreatedAt);
-  setIfConfigured(columnValues, config.columns.dbsReference, updates.dbsReference);
-  setIfConfigured(columnValues, config.columns.errorDetails, updates.errorDetails);
-  setIfConfigured(columnValues, config.columns.processingTimestamp, updates.processingTimestamp);
-
-  return mondayRequest<MondayChangeMultipleColumnValuesResponse>(
-    `
-      mutation UpdateDbsItem($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
-        change_multiple_column_values(board_id: $boardId, item_id: $itemId, column_values: $columnValues) {
-          id
-        }
-      }
-    `,
-    {
-      boardId: config.boardId,
-      itemId,
-      columnValues: JSON.stringify(columnValues),
-    },
-    config.token,
-  );
-}
-
-export async function updateMondayTrustIdIdCheckItem(
-  itemId: string,
-  updates: MondayTrustIdIdCheckItemUpdates,
-  config: MondayTrustIdIdCheckBoardConfig,
-) {
-  const columnValues: Record<string, string | null> = {};
-
-  setIfConfigured(columnValues, config.columns.status, updates.status);
-  setIfConfigured(columnValues, config.columns.trustIdContainerId, updates.trustIdContainerId);
-  setIfConfigured(columnValues, config.columns.trustIdGuestId, updates.trustIdGuestId);
-  setIfConfigured(columnValues, config.columns.inviteCreatedAt, updates.inviteCreatedAt);
-  setIfConfigured(columnValues, config.columns.resultSummary, updates.resultSummary);
-  setIfConfigured(columnValues, config.columns.errorDetails, updates.errorDetails);
-  setIfConfigured(columnValues, config.columns.processingTimestamp, updates.processingTimestamp);
-
-  return mondayRequest<MondayChangeMultipleColumnValuesResponse>(
-    `
-      mutation UpdateTrustIdIdCheckItem($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
-        change_multiple_column_values(board_id: $boardId, item_id: $itemId, column_values: $columnValues) {
-          id
-        }
-      }
-    `,
-    {
-      boardId: config.boardId,
-      itemId,
-      columnValues: JSON.stringify(columnValues),
-    },
-    config.token,
-  );
+  return {
+    itemId: item.id,
+    applicantName,
+    applicantEmail,
+    linkedDriverItemId: parseLinkedItemId(readColumn(item, columns.linkedDriverItem)),
+    status: normalizeText(readColumn(item, columns.status)?.text),
+    trustIdContainerId: normalizeText(readColumn(item, columns.trustIdContainerId)?.text),
+    trustIdGuestId: normalizeText(readColumn(item, columns.trustIdGuestId)?.text),
+    inviteCreatedAt: normalizeText(readColumn(item, columns.inviteCreatedAt)?.text),
+    dbsReference: normalizeText(readColumn(item, columns.dbsReference)?.text),
+    errorDetails: normalizeText(readColumn(item, columns.errorDetails)?.text),
+    processingTimestamp: normalizeText(readColumn(item, columns.processingTimestamp)?.text),
+  };
 }

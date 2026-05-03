@@ -1,65 +1,26 @@
-const trustIdDefaultBaseUrl = 'https://cloud.trustid.co.uk';
+const trustidDefaultBaseUrl = 'https://cloud.trustid.co.uk';
 
-export type TrustIdConfig = {
+export type TrustidConfig = {
   baseUrl?: string;
   apiKey: string;
-  username?: string;
-  password?: string;
-  deviceId: string;
-};
-
-export type TrustIdSession = {
-  deviceId: string;
-  sessionId: string;
-};
-
-export type TrustIdAuthenticatedConfig = TrustIdConfig & {
-  session?: TrustIdSession;
-};
-
-export type TrustIdLoginRequest = {
   username: string;
   password: string;
-  requireAdmin?: boolean;
+  deviceId: string;
 };
 
-export type TrustIdLoginResponse = TrustIdResponse & {
-  SessionId: string;
-};
-
-export type TrustIdResponse = {
-  Success: boolean;
-  Message?: string;
-};
-
-export type TrustIdFlexibleFieldValue = {
-  FlexibleFieldVersionId: string;
-  FieldValueString?: string;
-  FieldValueInt?: number;
-  FieldValueDate?: string;
-  FieldValueDecimal?: number;
-};
-
-export type TrustIdCallbackHeader = {
-  Header: 'Authorization';
-  Value: string;
-};
-
-export type TrustIdCreateGuestLinkRequest = {
+export type CreateGuestLinkRequest = {
   email: string;
   name: string;
   branchId?: string;
   clientApplicationReference?: string;
   containerEventCallbackUrl?: string;
-  containerEventCallbackHeaders?: TrustIdCallbackHeader[];
-  applicationFlexibleFieldValues?: TrustIdFlexibleFieldValue[];
   sendEmail?: boolean;
-  emailSubjectOverride?: string | null;
-  emailContentOverride?: string | null;
   digitalIdentificationScheme?: number;
 };
 
-export type TrustIdCreateGuestLinkResponse = TrustIdResponse & {
+export type CreateGuestLinkResponse = {
+  Success: boolean;
+  Message?: string;
   LinkUrl?: string;
   ContainerId?: string;
   GuestId?: string;
@@ -67,23 +28,19 @@ export type TrustIdCreateGuestLinkResponse = TrustIdResponse & {
   EmailContent?: string;
 };
 
-export type TrustIdContainerRequest = {
-  containerId: string;
-};
-
-export type TrustIdDocumentContainerResponse = TrustIdResponse & {
+export type ContainerResponse = {
+  Success: boolean;
+  Message?: string;
   Container?: unknown;
 };
 
-export type TrustIdDbsFormResponse = TrustIdResponse & {
+export type DbsFormResponse = {
+  Success: boolean;
+  Message?: string;
   DBSForm?: unknown;
 };
 
-export type TrustIdUpdateDbsFormRequest = {
-  dbsForm: unknown;
-};
-
-export type TrustIdInitiateBasicDbsCheckRequest = {
+export type InitiateBasicDbsCheckRequest = {
   containerId: string;
   employerName?: string;
   candidateOriginalDocumentsChecked: boolean;
@@ -98,213 +55,170 @@ export type TrustIdInitiateBasicDbsCheckRequest = {
   other?: string;
 };
 
-export type TrustIdBasicDbsResponse = TrustIdResponse & {
+export type BasicDbsResponse = {
+  Success: boolean;
+  Message?: string;
   DbsCheckResult?: {
     DBSReference?: string;
     ErrorMessage?: string;
   };
 };
 
-type TrustIdRawLoginResponse = TrustIdResponse & {
-  SessionId?: string;
-};
+export interface TrustidClient {
+  createGuestLink(request: CreateGuestLinkRequest): Promise<CreateGuestLinkResponse>;
+  retrieveDocumentContainer(request: { containerId: string }): Promise<ContainerResponse>;
+  retrieveDbsForm(request: { containerId: string }): Promise<DbsFormResponse>;
+  initiateBasicDbsCheck(request: InitiateBasicDbsCheckRequest): Promise<BasicDbsResponse>;
+}
 
-export class TrustIdApiError extends Error {
-  status?: number;
-  responseBody?: string;
+export class TrustidApiError extends Error {
+  readonly status?: number;
+  readonly responseBody?: string;
 
-  constructor(
-    message: string,
-    status?: number,
-    responseBody?: string,
-  ) {
+  constructor(message: string, status?: number, responseBody?: string) {
     super(message);
-    this.name = 'TrustIdApiError';
+    this.name = 'TrustidApiError';
     this.status = status;
     this.responseBody = responseBody;
   }
 }
 
-export function buildTrustIdUrl(baseUrl: string | undefined, path: string) {
-  return new URL(`/VPE/${path.replace(/^\/+/, '')}`, baseUrl ?? trustIdDefaultBaseUrl).toString();
+type TrustidSession = { deviceId: string; sessionId: string };
+
+type TrustidEnvelope = {
+  Success: boolean;
+  Message?: string;
+};
+
+export class TrustidApiClient implements TrustidClient {
+  private config: TrustidConfig;
+  private session: TrustidSession | null = null;
+
+  constructor(config: TrustidConfig) {
+    this.config = config;
+  }
+
+  async createGuestLink(request: CreateGuestLinkRequest): Promise<CreateGuestLinkResponse> {
+    const session = await this.getSession();
+    return this.postJson<CreateGuestLinkResponse>('/guestLink/createGuestLink/', {
+      DeviceId: session.deviceId,
+      SessionId: session.sessionId,
+      Email: request.email,
+      Name: request.name,
+      BranchId: request.branchId,
+      ClientApplicationReference: request.clientApplicationReference,
+      ContainerEventCallbackUrl: request.containerEventCallbackUrl,
+      SendEmail: request.sendEmail ?? true,
+      DigitalIdentificationScheme: request.digitalIdentificationScheme,
+    });
+  }
+
+  async retrieveDocumentContainer(request: { containerId: string }): Promise<ContainerResponse> {
+    const session = await this.getSession();
+    return this.postJson<ContainerResponse>('/dataAccess/retrieveDocumentContainer/', {
+      DeviceId: session.deviceId,
+      SessionId: session.sessionId,
+      ContainerId: request.containerId,
+    });
+  }
+
+  async retrieveDbsForm(request: { containerId: string }): Promise<DbsFormResponse> {
+    const session = await this.getSession();
+    return this.postJson<DbsFormResponse>('/dataAccess/retrieveDBSForm/', {
+      DeviceId: session.deviceId,
+      SessionId: session.sessionId,
+      ContainerId: request.containerId,
+    });
+  }
+
+  async initiateBasicDbsCheck(request: InitiateBasicDbsCheckRequest): Promise<BasicDbsResponse> {
+    const session = await this.getSession();
+    return this.postJson<BasicDbsResponse>('/dataAccess/initiateBasicDbsCheck/', {
+      DeviceId: session.deviceId,
+      SessionId: session.sessionId,
+      ContainerId: request.containerId,
+      EmployerName: request.employerName,
+      CandidateOriginalDocumentsChecked: request.candidateOriginalDocumentsChecked,
+      CandidateAddressChecked: request.candidateAddressChecked,
+      CandidateDateOfBirthChecked: request.candidateDateOfBirthChecked,
+      EvidenceCheckedBy: request.evidenceCheckedBy,
+      EvidenceCheckedDate: request.evidenceCheckedDate,
+      SelfDeclarationCheck: request.selfDeclarationCheck,
+      ApplicationConsent: request.applicationConsent,
+      PurposeOfCheck: request.purposeOfCheck,
+      EmploymentSector: request.employmentSector,
+      Other: request.other,
+    });
+  }
+
+  private async getSession(): Promise<TrustidSession> {
+    if (this.session) return this.session;
+
+    const response = await this.postJson<TrustidEnvelope & { SessionId?: string }>(
+      '/session/login/',
+      {
+        DeviceId: this.config.deviceId,
+        Username: this.config.username,
+        Password: this.config.password,
+      },
+    );
+    if (!response.SessionId) {
+      throw new TrustidApiError(response.Message ?? 'TrustID login response missing SessionId');
+    }
+    this.session = { deviceId: this.config.deviceId, sessionId: response.SessionId };
+    return this.session;
+  }
+
+  private async postJson<T extends TrustidEnvelope>(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<T> {
+    const url = new URL(
+      `/VPE/${path.replace(/^\/+/, '')}`,
+      this.config.baseUrl ?? trustidDefaultBaseUrl,
+    ).toString();
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Tid-Api-Key': this.config.apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new TrustidApiError(
+        `TrustID request failed with ${response.status}: ${text}`,
+        response.status,
+        text,
+      );
+    }
+
+    const payload = JSON.parse(text) as T;
+
+    if (payload.Success === false) {
+      throw new TrustidApiError(payload.Message ?? 'TrustID request failed', response.status, text);
+    }
+
+    return payload;
+  }
 }
 
-export function buildTrustIdRequestBody<T extends Record<string, unknown>>(session: TrustIdSession, payload: T) {
+export function loadTrustidConfigFromEnv(): TrustidConfig {
   return {
-    DeviceId: session.deviceId,
-    SessionId: session.sessionId,
-    ...payload,
+    baseUrl: process.env.TRUSTID_BASE_URL?.trim(),
+    apiKey: readEnv('TRUSTID_API_KEY'),
+    username: readEnv('TRUSTID_USERNAME'),
+    password: readEnv('TRUSTID_PASSWORD'),
+    deviceId: readEnv('TRUSTID_DEVICE_ID'),
   };
 }
 
-export function buildTrustIdGuestLinkPayload(
-  request: TrustIdCreateGuestLinkRequest,
-  session: TrustIdSession,
-) {
-  return buildTrustIdRequestBody(session, {
-    Email: request.email,
-    Name: request.name,
-    BranchId: request.branchId,
-    ApplicationFlexibleFieldValues: request.applicationFlexibleFieldValues,
-    SendEmail: request.sendEmail ?? true,
-    EmailSubjectOverride: request.emailSubjectOverride,
-    EmailContentOverride: request.emailContentOverride,
-    ContainerEventCallbackUrl: request.containerEventCallbackUrl,
-    ContainerEventCallbackHeaders: request.containerEventCallbackHeaders,
-    ClientApplicationReference: request.clientApplicationReference,
-    DigitalIdentificationScheme: request.digitalIdentificationScheme,
-  });
-}
-
-export function buildTrustIdInitiateBasicDbsCheckPayload(
-  request: TrustIdInitiateBasicDbsCheckRequest,
-  session: TrustIdSession,
-) {
-  return buildTrustIdRequestBody(session, {
-    ContainerId: request.containerId,
-    EmployerName: request.employerName,
-    CandidateOriginalDocumentsChecked: request.candidateOriginalDocumentsChecked,
-    CandidateAddressChecked: request.candidateAddressChecked,
-    CandidateDateOfBirthChecked: request.candidateDateOfBirthChecked,
-    EvidenceCheckedBy: request.evidenceCheckedBy,
-    EvidenceCheckedDate: request.evidenceCheckedDate,
-    SelfDeclarationCheck: request.selfDeclarationCheck,
-    ApplicationConsent: request.applicationConsent,
-    PurposeOfCheck: request.purposeOfCheck,
-    EmploymentSector: request.employmentSector,
-    Other: request.other,
-  });
-}
-
-async function postTrustId<TResponse>(
-  path: string,
-  body: Record<string, unknown>,
-  config: TrustIdConfig,
-): Promise<TResponse> {
-  const endpoint = buildTrustIdUrl(config.baseUrl, path);
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Tid-Api-Key': config.apiKey,
-    },
-    body: JSON.stringify(body),
-  });
-
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new TrustIdApiError(`TrustID request failed with ${response.status}: ${responseText}`, response.status, responseText);
-  }
-
-  const payload = JSON.parse(responseText) as TrustIdResponse;
-
-  if (payload.Success === false) {
-    throw new TrustIdApiError(payload.Message ?? 'TrustID request failed', response.status, responseText);
-  }
-
-  return payload as TResponse;
-}
-
-export async function loginToTrustId(
-  request: TrustIdLoginRequest,
-  config: TrustIdConfig,
-): Promise<TrustIdSession> {
-  const response = await postTrustId<TrustIdRawLoginResponse>(
-    '/session/login/',
-    {
-      DeviceId: config.deviceId,
-      Username: request.username,
-      Password: request.password,
-      RequireAdmin: request.requireAdmin,
-    },
-    config,
-  );
-
-  if (!response.SessionId) {
-    throw new TrustIdApiError(response.Message ?? 'TrustID login response missing SessionId');
-  }
-
-  return {
-    deviceId: config.deviceId,
-    sessionId: response.SessionId,
-  };
-}
-
-async function getTrustIdSession(config: TrustIdAuthenticatedConfig): Promise<TrustIdSession> {
-  if (config.session) {
-    return config.session;
-  }
-
-  if (!config.username || !config.password) {
-    throw new TrustIdApiError('TrustID credentials or session are required');
-  }
-
-  return loginToTrustId(
-    {
-      username: config.username,
-      password: config.password,
-    },
-    config,
-  );
-}
-
-export async function createTrustIdGuestLink(
-  request: TrustIdCreateGuestLinkRequest,
-  config: TrustIdAuthenticatedConfig,
-) {
-  const session = await getTrustIdSession(config);
-  return postTrustId<TrustIdCreateGuestLinkResponse>(
-    '/guestLink/createGuestLink/',
-    buildTrustIdGuestLinkPayload(request, session),
-    config,
-  );
-}
-
-export async function retrieveTrustIdDocumentContainer(
-  request: TrustIdContainerRequest,
-  config: TrustIdAuthenticatedConfig,
-) {
-  const session = await getTrustIdSession(config);
-  return postTrustId<TrustIdDocumentContainerResponse>(
-    '/dataAccess/retrieveDocumentContainer/',
-    buildTrustIdRequestBody(session, { ContainerId: request.containerId }),
-    config,
-  );
-}
-
-export async function retrieveTrustIdDbsForm(
-  request: TrustIdContainerRequest,
-  config: TrustIdAuthenticatedConfig,
-) {
-  const session = await getTrustIdSession(config);
-  return postTrustId<TrustIdDbsFormResponse>(
-    '/dataAccess/retrieveDBSForm/',
-    buildTrustIdRequestBody(session, { ContainerId: request.containerId }),
-    config,
-  );
-}
-
-export async function updateTrustIdDbsForm(
-  request: TrustIdUpdateDbsFormRequest,
-  config: TrustIdAuthenticatedConfig,
-) {
-  const session = await getTrustIdSession(config);
-  return postTrustId<TrustIdResponse>(
-    '/dataAccess/updateDBSForm/',
-    buildTrustIdRequestBody(session, { DBSForm: request.dbsForm }),
-    config,
-  );
-}
-
-export async function initiateTrustIdBasicDbsCheck(
-  request: TrustIdInitiateBasicDbsCheckRequest,
-  config: TrustIdAuthenticatedConfig,
-) {
-  const session = await getTrustIdSession(config);
-  return postTrustId<TrustIdBasicDbsResponse>(
-    '/dataAccess/initiateBasicDbsCheck/',
-    buildTrustIdInitiateBasicDbsCheckPayload(request, session),
-    config,
-  );
+function readEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing ${name}`);
+  return value;
 }

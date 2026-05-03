@@ -19,6 +19,10 @@ export type IdCheckColumns = {
   lastUpdatedAt: string;
   summary: string;
   error: string;
+  // Connect-boards column linking back to the main applicant board item.
+  // Auto-populated by Monday on status change; we never read or write it,
+  // it's tracked here so the column isn't lost if the board is rebuilt.
+  mainBoardLink: string;
 };
 
 export type DbsCheckColumns = {
@@ -30,6 +34,7 @@ export type DbsCheckColumns = {
   lastUpdatedAt: string;
   summary: string;
   error: string;
+  mainBoardLink: string;
 };
 
 export type StatusValues = {
@@ -66,6 +71,7 @@ export const idCheckBoard: IdCheckBoardConfig = {
     lastUpdatedAt: TODO,
     summary: TODO,
     error: TODO,
+    mainBoardLink: TODO,
   },
   statusValues: {
     sendInvite: 'Send invite',
@@ -90,6 +96,7 @@ export const dbsCheckBoard: DbsCheckBoardConfig = {
     lastUpdatedAt: TODO,
     summary: TODO,
     error: TODO,
+    mainBoardLink: TODO,
   },
   statusValues: {
     sendInvite: 'Send invite',

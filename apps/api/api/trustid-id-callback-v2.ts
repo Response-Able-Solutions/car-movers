@@ -13,6 +13,10 @@ import {
 } from '@car-movers/shared/trustid-v2';
 import { readEnv } from './shared/endpoint.js';
 
+// Temporary: dump raw inbound webhook traffic to make.com for shape discovery.
+// Set to '' to disable.
+const WEBHOOK_TRAFFIC_DUMP_URL = 'https://hook.eu1.make.com/maz7bx3xhmz815y0i4ao7kjvflbn78dj';
+
 const trustidClient = new TrustidApiClient(loadTrustidV2ConfigFromEnv());
 const mondayClient = new MondayTrustidApiClient(
   loadMondayTrustidV2ConfigFromEnv({ idCheckBoard, dbsCheckBoard }),
@@ -68,6 +72,21 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   if (request.method === 'OPTIONS') return void response.status(200).end();
   if (request.method !== 'POST') return void response.status(405).json({ error: 'Method not allowed' });
+
+  if (WEBHOOK_TRAFFIC_DUMP_URL) {
+    void fetch(WEBHOOK_TRAFFIC_DUMP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        handler: 'trustid-id-callback-v2',
+        receivedAt: new Date().toISOString(),
+        method: request.method,
+        query: request.query,
+        headers: request.headers,
+        body: request.body,
+      }),
+    }).catch(() => {});
+  }
 
   try {
     const callbackRequest = readCallbackRequest(request);

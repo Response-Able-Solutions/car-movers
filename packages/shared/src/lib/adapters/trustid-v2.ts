@@ -107,7 +107,7 @@ export class TrustidApiClient implements TrustidClient {
       Email: request.email,
       Name: request.name,
       ClientApplicationReference: request.clientApplicationReference,
-      ContainerEventCallbackURL: request.containerEventCallbackUrl,
+      ContainerEventCallbackUrl: request.containerEventCallbackUrl,
       DigitalIdentificationScheme: request.digitalIdentificationScheme,
     }));
   }

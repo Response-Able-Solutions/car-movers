@@ -24,6 +24,7 @@ export {
   type IdCheckInviteSentUpdates,
   type IdCheckErrorUpdates,
   type IdCheckResultUpdates,
+  type WriteIdCheckOutcomePayload,
   type DbsCheckItem,
   type DbsCheckInviteSentUpdates,
   type DbsCheckErrorUpdates,
@@ -52,8 +53,11 @@ export { forwardToMake } from './lib/forward-to-make.ts';
 export {
   idCheckBoard,
   dbsCheckBoard,
+  idCheckSignalStatusValues,
   type IdCheckBoardConfig,
   type DbsCheckBoardConfig,
   type StatusValues,
+  type IdCheckStatusValues,
   type DbsStatusValues,
+  type SignalStatusValues,
 } from './lib/monday-boards.ts';

@@ -98,6 +98,7 @@ function fakeMonday(items: {
     markIdResult: async (itemId, updates) => {
       calls.idResulted.push({ itemId, updates });
     },
+    writeIdCheckOutcome: async () => undefined,
     fetchDbsItem: async (itemId: string): Promise<DbsCheckItem> => {
       calls.fetchedDbs.push(itemId);
       const item = items.dbsCheck;

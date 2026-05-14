@@ -33,6 +33,19 @@ export type IdCheckResultUpdates = {
   lastUpdatedAt: string;
 };
 
+// Atomic payload for writing the full ID-callback outcome to Monday in
+// a single mutation. Each per-signal block is `null` when the signal
+// was not determined (clears the column on the board). `errorText` is
+// populated when overallStatus is the Error label; otherwise null.
+export type WriteIdCheckOutcomePayload = {
+  overallStatus: string;
+  liveness: { status: string } | null;
+  faceMatch: { status: string; errorText: string | null } | null;
+  address: { status: string; errorText: string | null } | null;
+  errorText: string | null;
+  lastUpdatedAt: string;
+};
+
 export type DbsCheckItem = {
   itemId: string;
   applicantName: string;
@@ -80,6 +93,7 @@ export interface MondayTrustidClient {
   markIdInviteSent(itemId: string, updates: IdCheckInviteSentUpdates): Promise<void>;
   markIdError(itemId: string, updates: IdCheckErrorUpdates): Promise<void>;
   markIdResult(itemId: string, updates: IdCheckResultUpdates): Promise<void>;
+  writeIdCheckOutcome(itemId: string, payload: WriteIdCheckOutcomePayload): Promise<void>;
   fetchDbsItem(itemId: string): Promise<DbsCheckItem>;
   markDbsInviteSent(itemId: string, updates: DbsCheckInviteSentUpdates): Promise<void>;
   markDbsError(itemId: string, updates: DbsCheckErrorUpdates): Promise<void>;
@@ -207,6 +221,20 @@ export class MondayTrustidApiClient implements MondayTrustidClient {
       [board.columns.status]: statusValue(updates.status),
       [board.columns.summary]: updates.summary,
       [board.columns.lastUpdatedAt]: updates.lastUpdatedAt,
+    });
+  }
+
+  async writeIdCheckOutcome(itemId: string, payload: WriteIdCheckOutcomePayload): Promise<void> {
+    const board = this.requireIdCheckBoard();
+    await this.changeMultipleColumnValues(itemId, board.boardId, {
+      [board.columns.status]: statusValue(payload.overallStatus),
+      [board.columns.livenessStatus]: payload.liveness ? statusValue(payload.liveness.status) : null,
+      [board.columns.faceMatchStatus]: payload.faceMatch ? statusValue(payload.faceMatch.status) : null,
+      [board.columns.faceMatchError]: payload.faceMatch?.errorText ?? null,
+      [board.columns.addressStatus]: payload.address ? statusValue(payload.address.status) : null,
+      [board.columns.addressError]: payload.address?.errorText ?? null,
+      [board.columns.error]: payload.errorText,
+      [board.columns.lastUpdatedAt]: payload.lastUpdatedAt,
     });
   }
 

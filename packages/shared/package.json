@@ -22,10 +22,6 @@
       "types": "./src/monday.ts",
       "default": "./dist/monday.js"
     },
-    "./trustid": {
-      "types": "./src/trustid.ts",
-      "default": "./dist/trustid.js"
-    },
     "./trustid-v2": {
       "types": "./src/trustid-v2.ts",
       "default": "./dist/trustid-v2.js"

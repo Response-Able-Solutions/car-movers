@@ -12,6 +12,11 @@ export type IdCheckColumns = {
   summary: string;
   error: string;
   mainBoardLink: string;
+  livenessStatus: string;
+  addressStatus: string;
+  addressError: string;
+  faceMatchStatus: string;
+  faceMatchError: string;
 };
 
 export type DbsCheckColumns = {
@@ -42,10 +47,22 @@ export type DbsStatusValues = StatusValues & {
   dbsSubmitted: string;
 };
 
+export type IdCheckStatusValues = StatusValues & {
+  // Composite outcome: identity verified end-to-end but address
+  // verification did not match. Treated as a terminal status.
+  passWithAddressFail: string;
+};
+
+export type SignalStatusValues = {
+  liveness: { pass: string; fail: string };
+  address: { pass: string; fail: string };
+  faceMatch: { pass: string; fail: string; unsure: string };
+};
+
 export type IdCheckBoardConfig = {
   boardId: string;
   columns: IdCheckColumns;
-  statusValues: StatusValues;
+  statusValues: IdCheckStatusValues;
 };
 
 export type DbsCheckBoardConfig = {
@@ -66,6 +83,11 @@ export const idCheckBoard: IdCheckBoardConfig = {
     summary: "long_text_mm30vz7s",
     error: "long_text_mm30nw1f",
     mainBoardLink: "text_mm30t5tk",
+    livenessStatus: "color_mm3bmr84",
+    addressStatus: "color_mm3bs366",
+    addressError: "text_mm3bb5dd",
+    faceMatchStatus: "color_mm3b6mqe",
+    faceMatchError: "text_mm3b9eab",
   },
   statusValues: {
     sendInvite: 'Send invite',
@@ -74,7 +96,14 @@ export const idCheckBoard: IdCheckBoardConfig = {
     refer: 'Refer',
     fail: 'Fail',
     error: 'Error',
-  } satisfies StatusValues,
+    passWithAddressFail: 'Pass With Address Fail',
+  } satisfies IdCheckStatusValues,
+};
+
+export const idCheckSignalStatusValues: SignalStatusValues = {
+  liveness: { pass: 'Pass', fail: 'Fail' },
+  address: { pass: 'Pass', fail: 'Fail' },
+  faceMatch: { pass: 'Pass', fail: 'Fail', unsure: 'Unsure' },
 };
 
 export const dbsCheckBoard: DbsCheckBoardConfig = {

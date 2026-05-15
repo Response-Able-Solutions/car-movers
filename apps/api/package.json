@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev:server": "vercel dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.ts"
   },
   "dependencies": {
     "@car-movers/shared": "0.0.0",

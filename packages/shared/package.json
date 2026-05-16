@@ -29,6 +29,10 @@
 "./applicant-interview-sheet": {
       "types": "./src/applicant-interview-sheet.ts",
       "default": "./dist/applicant-interview-sheet.js"
+    },
+    "./metrics": {
+      "types": "./src/metrics.ts",
+      "default": "./dist/metrics.js"
     }
   }
 }

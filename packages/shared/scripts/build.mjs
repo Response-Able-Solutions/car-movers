@@ -7,7 +7,7 @@ await build({
     'src/idenfy.ts',
     'src/monday.ts',
     'src/applicant-interview-sheet.ts',
-
+    'src/metrics.ts',
   ],
   bundle: true,
   outdir: 'dist',

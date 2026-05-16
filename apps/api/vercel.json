@@ -1,4 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "yarn workspace @car-movers/shared build"
+  "buildCommand": "yarn workspace @car-movers/shared build",
+  "crons": [
+    { "path": "/api/cron-metrics", "schedule": "0 3 * * *" }
+  ]
 }

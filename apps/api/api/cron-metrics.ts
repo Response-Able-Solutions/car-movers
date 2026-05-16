@@ -1,6 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { computeCohortMetrics, type LedgerEvent } from '@car-movers/shared/metrics';
+import {
+  computeCohortMetrics,
+  computeStageStats,
+  type LedgerEvent,
+} from '@car-movers/shared/metrics';
 
 const MONDAY_ENDPOINT = 'https://api.monday.com/v2';
 
@@ -19,8 +23,18 @@ const COHORT_COL_AVG_DAYS_HIRED = 'numeric_mm3dycpg';
 const COHORT_COL_IN_FLIGHT = 'numeric_mm3d587h';
 const COHORT_COL_COMPLETE = 'boolean_mm3dxn20';
 
+const STAGE_BOARD_ID = '5096591957';
+const STAGE_COL_STATUS = 'text_mm3dn3jt';
+const STAGE_COL_ENTERED = 'numeric_mm3dpm4v';
+const STAGE_COL_PCT_ADVANCED = 'numeric_mm1xqd9g';
+const STAGE_COL_PCT_WITHDREW = 'numeric_mm2526zz';
+const STAGE_COL_PCT_REJECTED = 'numeric_mm2h455f';
+const STAGE_COL_STILL_HERE = 'numeric_mm3d1qb7';
+const STAGE_COL_MEDIAN_DWELL = 'numeric_mm3dmmt0';
+
 const PRE_PIPELINE_INDEX = 5;
 const PRE_PIPELINE_LABEL = '(pre-pipeline)';
+const DWELL_THRESHOLD_MS = 60 * 60 * 1000;
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== 'GET' && request.method !== 'POST') {
@@ -251,6 +265,89 @@ export default async function handler(request: VercelRequest, response: VercelRe
       skipped_complete: cohortSkipped,
     });
 
+    // Load existing Stage Stats rows so we can upsert by Status (item name).
+    const existingStage: BoardItemsResp = await gql<BoardItemsResp>(
+      `
+        query StageBoard($boardId: ID!) {
+          boards(ids: [$boardId]) {
+            items_page(limit: 500) {
+              items {
+                id
+                column_values(ids: ["${STAGE_COL_STATUS}"]) { id text value }
+              }
+            }
+          }
+        }
+      `,
+      { boardId: STAGE_BOARD_ID },
+    );
+    const stageItemByStatus = new Map<string, string>();
+    for (const item of existingStage.boards[0].items_page.items) {
+      const cvs: Record<string, { text: string | null }> = {};
+      for (const cv of item.column_values) cvs[cv.id] = { text: cv.text };
+      const status = cvs[STAGE_COL_STATUS]?.text?.trim();
+      if (status) stageItemByStatus.set(status, item.id);
+    }
+
+    const stageRows = computeStageStats(events, {
+      dwellThresholdMs: DWELL_THRESHOLD_MS,
+      hiredStatus: 'Hired',
+      terminalNegative: new Set(['Withdrawn', 'Rejected']),
+      preEntryStatus: PRE_PIPELINE_LABEL,
+    });
+
+    let stageUpdated = 0;
+    let stageCreated = 0;
+    for (const row of stageRows) {
+      const medianRounded =
+        row.medianDwellDays === null ? '' : Math.round(row.medianDwellDays * 10) / 10;
+      const cv: Record<string, unknown> = {
+        [STAGE_COL_STATUS]: row.status,
+        [STAGE_COL_ENTERED]: row.entered,
+        [STAGE_COL_PCT_ADVANCED]: row.pctAdvanced,
+        [STAGE_COL_PCT_WITHDREW]: row.pctWithdrew,
+        [STAGE_COL_PCT_REJECTED]: row.pctRejected,
+        [STAGE_COL_STILL_HERE]: row.stillHere,
+        [STAGE_COL_MEDIAN_DWELL]: medianRounded,
+      };
+      const existingId = stageItemByStatus.get(row.status);
+      if (existingId) {
+        await gql<MutationResp>(
+          `
+            mutation Update($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
+              change_multiple_column_values(board_id: $boardId, item_id: $itemId, column_values: $columnValues) { id }
+            }
+          `,
+          {
+            boardId: STAGE_BOARD_ID,
+            itemId: existingId,
+            columnValues: JSON.stringify(cv),
+          },
+        );
+        stageUpdated++;
+      } else {
+        await gql<MutationResp>(
+          `
+            mutation Create($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+              create_item(board_id: $boardId, item_name: $itemName, column_values: $columnValues) { id }
+            }
+          `,
+          {
+            boardId: STAGE_BOARD_ID,
+            itemName: row.status,
+            columnValues: JSON.stringify(cv),
+          },
+        );
+        stageCreated++;
+      }
+    }
+
+    console.log('cron.metrics.stage.done', {
+      stages: stageRows.length,
+      created: stageCreated,
+      updated: stageUpdated,
+    });
+
     return void response.status(200).json({
       ok: true,
       events: events.length,
@@ -259,6 +356,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
         created: cohortCreated,
         updated: cohortUpdated,
         skipped_complete: cohortSkipped,
+      },
+      stage: {
+        rows: stageRows.length,
+        created: stageCreated,
+        updated: stageUpdated,
       },
     });
   } catch (error) {
